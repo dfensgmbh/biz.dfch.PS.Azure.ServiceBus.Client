@@ -33,7 +33,7 @@ Param
 	# [Optional] The MessageFactory. If you do not 
 	# specify this value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 0)]
-	[string] $MessageFactory = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageFactory
+	$MessageFactory = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageFactory
 	, 
 	# [Optional] The QueueName such as 'MyQueue'. If you do not specify this 
 	# value it is taken from the module configuration file.

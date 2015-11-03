@@ -34,20 +34,32 @@ Param
 	[Parameter(Mandatory = $true, Position = 0)]
 	$Message
 	, 
+	# [Optional] Sets a application specific label.
+	[Parameter(Mandatory = $false, Position = 1)]
+	[string] $MessageLabel
+	, 
+	# [Optional] Sets addional message properties.
+	[Parameter(Mandatory = $false, Position = 1)]
+	[hashtable] $MessageProperties
+	, 
+	# [Optional] The TimeToLive is the duration after which the message expires, starting from when the message is sent to the Service Bus.
+	[Parameter(Mandatory = $false, Position = 2)]
+	[int] $MessageTimeToLiveSec
+	, 
 	# [Optional] The QueueName such as 'MyQueue'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 1)]
+	[Parameter(Mandatory = $false, Position = 3)]
 	[string] $QueueName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultQueueName
 	, 
 	# [Optional] The Format such as 'JSON'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 1)]
-	[string] $As = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Format
+	[Parameter(Mandatory = $false, Position = 4)]
+	[string] $MessageFormat = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Format
 	, 
 	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
 	# which to perform login. Default is credential as specified in the module 
 	# configuration file.
-	[Parameter(Mandatory = $false, Position = 2)]
+	[Parameter(Mandatory = $false, Position = 5)]
 	[alias("cred")]
 	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
 )
@@ -73,25 +85,42 @@ try
 	
 	# Create MessageClient
 	$MessageClient = New-MessageSender -QueueName $QueueName;
+
+	# Convert message body
+	$MessageBody = $Message.ToString();
+	# switch($MessageFormat) 
+	# {
+		# 'xml' { $InputParameter = (ConvertTo-Xml -InputObject $Message).OuterXml; }
+		# 'xml-pretty' { $InputParameter = Format-Xml -String (ConvertTo-Xml -InputObject $Message).OuterXml; }
+		# 'json' { $InputParameter = ConvertTo-Json -InputObject $Message -Compress; }
+		# 'json-pretty' { $InputParameter = ConvertTo-Json -InputObject $Message; }
+		# Default { $InputParameter = $Message; }
+	# }
 	
+	Log-Debug $fn ("-> InputParameter '{0}'; Type '{1}'" -f $InputParameter.toString(), $InputParameter.GetType() );
+	Log-Debug $fn ("-> As '{0}'; Type '{1}'" -f $MessageFormat.toString(), $MessageFormat.GetType() );
+		
 	# Create Message
-	switch($As) 
-	{
-		'xml' { $InputParameter = (ConvertTo-Xml -InputObject $Message).OuterXml; }
-		'xml-pretty' { $InputParameter = Format-Xml -String (ConvertTo-Xml -InputObject $Message).OuterXml; }
-		'json' { $InputParameter = ConvertTo-Json -InputObject $Message -Compress; }
-		'json-pretty' { $InputParameter = ConvertTo-Json -InputObject $Message; }
-		Default { $InputParameter = $Message; }
+	[Microsoft.ServiceBus.Messaging.BrokeredMessage] $BrokeredMessage = [Microsoft.ServiceBus.Messaging.BrokeredMessage]($MessageBody.ToString());
+	$BrokeredMessage.Properties['Body'] = $MessageBody.ToString();
+	$BrokeredMessage.Properties['BodyAs'] = $MessageFormat.ToString();
+	if ( $PSBoundParameters.ContainsKey('MessageProperties') ) {
+		foreach ( $MessageProperty in $MessageProperties.GetEnumerator() ) {
+			$BrokeredMessage.Properties[$MessageProperty.Name] = $MessageProperty.Value.ToString();
+		}
 	}
-	[Microsoft.ServiceBus.Messaging.BrokeredMessage] $BrokeredMessage = [Microsoft.ServiceBus.Messaging.BrokeredMessage]($InputParameter);
-	$BrokeredMessage.Properties['Body'] = $InputParameter;
-	$BrokeredMessage.Properties['BodyAs'] = $As;
+	if ( $PSBoundParameters.ContainsKey('MessageLabel') ) {
+		$BrokeredMessage.Label = $MessageLabel;
+	}
+	if ( $PSBoundParameters.ContainsKey('MessageTimeToLiveSec') ) {
+		$BrokeredMessage.TimeToLive = (New-TimeSpan -Seconds $MessageTimeToLiveSec);
+	}	
 	
-	try {
+	#try {
 		$MessageClient.Send($BrokeredMessage);	
-	} catch {
-		throw($gotoFailure);
-	}
+	#} catch {
+	#	throw($gotoFailure);
+	#}
 	
 	$OutputParameter = $BrokeredMessage.MessageId;
 	$fReturn = $true;

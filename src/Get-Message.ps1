@@ -34,10 +34,10 @@ Param
 	[Parameter(Mandatory = $false, Position = 0)]
 	[long] $MessageSequenceNumber
 	, 
-	# [Optional] The WaitTimeOutSec such as '10' Seconds for receiving a message before it times out. If you do not specify this 
-	# value it is taken from the default parameter.
+	# [Optional] The WaitTimeOutSec such as '3' Seconds for receiving a message before it times out. If you do not specify this 
+	# value it is taken from the default value = 3 sec.
 	[Parameter(Mandatory = $false, Position = 1)]
-	[int] $WaitTimeoutSec = 10
+	[int] $WaitTimeoutSec = 3
 	, 
 	# [Optional] The Receivemode such as 'PeekLock'. If you do not specify this 
 	# value it is taken from the default parameter.
