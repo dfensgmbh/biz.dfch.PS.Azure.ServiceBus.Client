@@ -35,6 +35,7 @@ Param
 	# [Optional] The EndpointServerName such as 'localhost'. If you do not 
 	# specify this value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 0)]
+	[ValidateNotNullorEmpty()]
 	[string] $EndpointServerName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).EndpointServerName
 	, 
 	# [Optional] The RuntimePort such as '123'. If you do not specify this 

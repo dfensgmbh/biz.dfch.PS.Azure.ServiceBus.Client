@@ -32,11 +32,13 @@ Param
 (
 	# [Optional] The MessageSequenceNumber for a deferred message.
 	[Parameter(Mandatory = $false, Position = 0)]
+	[ValidateNotNullorEmpty()]
 	[long] $MessageSequenceNumber
 	, 
 	# [Optional] The WaitTimeOutSec such as '3' Seconds for receiving a message before it times out. If you do not specify this 
 	# value it is taken from the default value = 3 sec.
 	[Parameter(Mandatory = $false, Position = 1)]
+	[ValidateNotNullorEmpty()]
 	[int] $WaitTimeoutSec = 3
 	, 
 	# [Optional] The Receivemode such as 'PeekLock'. If you do not specify this 
@@ -48,6 +50,7 @@ Param
 	# [Optional] The QueueName such as 'MyQueue'. If you do not specify this 
 	# value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 3)]
+	[ValidateNotNullorEmpty()]
 	[string] $QueueName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultQueueName
 	, 
 	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
@@ -78,7 +81,14 @@ try
 	# N/A
 	
 	# Create MessageClient
-	$MessageClient = New-MessageReceiver -QueueName $QueueName -Receivemode $Receivemode;
+	try {
+		$MessageClient = New-MessageReceiver -QueueName $QueueName -Receivemode $Receivemode;
+	} catch {
+		$msg = $_.Exception.Message;
+		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $MessageClient;
+		Log-Error $fn -msg $msg;
+		$PSCmdlet.ThrowTerminatingError($e);
+	}
 	
 	# Get Message
 	[Microsoft.ServiceBus.Messaging.BrokeredMessage] $BrokeredMessage = $MessageClient.Receive((New-TimeSpan -Seconds $WaitTimeoutSec));

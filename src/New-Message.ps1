@@ -32,6 +32,7 @@ Param
 (
 	# [Required] The Message such as 'Message 123'.
 	[Parameter(Mandatory = $true, Position = 0)]
+	[ValidateNotNullorEmpty()]
 	$Message
 	, 
 	# [Optional] Sets a application specific label.
@@ -44,16 +45,19 @@ Param
 	, 
 	# [Optional] The TimeToLive is the duration after which the message expires, starting from when the message is sent to the Service Bus.
 	[Parameter(Mandatory = $false, Position = 2)]
+	[ValidateNotNullorEmpty()]
 	[int] $MessageTimeToLiveSec
 	, 
 	# [Optional] The QueueName such as 'MyQueue'. If you do not specify this 
 	# value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 3)]
+	[ValidateNotNullorEmpty()]
 	[string] $QueueName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultQueueName
 	, 
 	# [Optional] The Format such as 'JSON'. If you do not specify this 
 	# value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 4)]
+	[ValidateNotNullorEmpty()]
 	[string] $MessageFormat = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Format
 	, 
 	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
@@ -84,7 +88,14 @@ try
 	# N/A
 	
 	# Create MessageClient
-	$MessageClient = New-MessageSender -QueueName $QueueName;
+	try {
+		$MessageClient = New-MessageSender -QueueName $QueueName;
+	} catch {
+		$msg = $_.Exception.Message;
+		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $MessageClient;
+		Log-Error $fn -msg $msg;
+		$PSCmdlet.ThrowTerminatingError($e);
+	}
 
 	# Convert message body
 	$MessageBody = $Message.ToString();
@@ -116,11 +127,14 @@ try
 		$BrokeredMessage.TimeToLive = (New-TimeSpan -Seconds $MessageTimeToLiveSec);
 	}	
 	
-	#try {
+	try {
 		$MessageClient.Send($BrokeredMessage);	
-	#} catch {
-	#	throw($gotoFailure);
-	#}
+	} catch {
+		$msg = $_.Exception.Message;
+		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $MessageClient;
+		Log-Error $fn -msg $msg;
+		$PSCmdlet.ThrowTerminatingError($e);
+	}
 	
 	$OutputParameter = $BrokeredMessage.MessageId;
 	$fReturn = $true;

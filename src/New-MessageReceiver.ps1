@@ -33,11 +33,13 @@ Param
 	# [Optional] The MessageFactory. If you do not 
 	# specify this value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 0)]
+	[ValidateNotNullorEmpty()]
 	$MessageFactory = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageFactory
 	, 
 	# [Optional] The QueueName such as 'MyQueue'. If you do not specify this 
 	# value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 1)]
+	[ValidateNotNullorEmpty()]
 	[string] $QueueName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultQueueName
 	, 
 	# [Optional] The Receivemode such as 'PeekLock'. If you do not specify this 
@@ -63,7 +65,7 @@ BEGIN
 	# Check MessageFactory connection
 	if ( $MessageFactory -isnot [Microsoft.ServiceBus.Messaging.MessagingFactory] ) {
 		$msg = "MessageFactory: Parameter validation FAILED. Connect to the message factory before using the Cmdlet.";
-		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $svc.Core;
+		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $MessageFactory;
 		$PSCmdlet.ThrowTerminatingError($e);
 	}
 	
