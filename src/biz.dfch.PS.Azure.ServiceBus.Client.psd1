@@ -10,7 +10,7 @@
 RootModule = 'biz.dfch.PS.Azure.ServiceBus.Client.psm1'
 
 # Version number of this module.
-ModuleVersion = '0.0.1.20151102'
+ModuleVersion = '0.0.1.20151104'
 
 # ID used to uniquely identify this module
 GUID = '66c43abd-1389-4aba-9430-715de70dd329'
@@ -48,12 +48,12 @@ DotNetFrameworkVersion = '4.5'
 # Modules that must be imported into the global environment prior to importing this module
 RequiredModules = @(
 	'biz.dfch.PS.System.Logging'
-	,
-	'biz.dfch.PS.System.Utilities'
 )
 
 # Assemblies that must be loaded prior to importing this module
 RequiredAssemblies = @(
+	'Microsoft.WindowsAzure.Configuration.dll'
+	,
 	'Microsoft.ServiceBus.dll'
 	,
 	'System.Net'
@@ -128,7 +128,7 @@ PrivateData = @{
 HelpInfoURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
 
 # Default prefix for commands exported from this module. Override the default prefix using Import-Module -Prefix.
-DefaultCommandPrefix = ''
+DefaultCommandPrefix = 'SB'
 
 }
 
