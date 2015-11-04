@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
+  <metadata>
+    <id>biz.dfch.PS.Azure.ServiceBus.Client</id>
+    <version>0.0.1</version>
+    <title>biz.dfch.PS.Azure.ServiceBus.Client</title>
+    <authors>d-fens GmbH</authors>
+    <owners>Ronald Rink</owners>
+    <licenseUrl>https://github.com/dfensgmbh/biz.dfch.PS.Azure.ServiceBus.Client/blob/master/LICENSE</licenseUrl>
+    <projectUrl>https://github.com/dfensgmbh/biz.dfch.PS.Azure.ServiceBus.Client</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/dfensgmbh/biz.dfch.PS.Azure.ServiceBus.Client/master/logo-32x32.png</iconUrl>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <description>=============================
+
+Module: biz.dfch.PS.Azure.ServiceBus.Client
+
+d-fens GmbH, General-Guisan-Strasse 6, CH-6300 Zug, Switzerland
+
+This Microsoft PowerShell module contains Cmdlets to perform various base actions and utility/convenience functions with Azure Service Bus.
+
+You can also download this module via [NuGet](http://nuget.org) with [Install-Package biz.dfch.PS.Azure.ServiceBus.Client](https://www.nuget.org/packages/biz.dfch.PS.Azure.ServiceBus.Client/)
+
+See https://github.com/dfensgmbh/biz.dfch.PS.Azure.ServiceBus.Client/wiki for a detailed description on how to use the Cmdlets in this module.
+</description>
+    <summary>This Microsoft PowerShell module contains Cmdlets to perform various base actions and utility/convenience functions with Azure Service Bus.</summary>
+    <releaseNotes>20151104
+
+* initial release
+* installation base path is '$env:ProgramFiles\WindowsPowerShell\Modules' and can be manually set as input parameter</releaseNotes>
+    <copyright>(c) 2015 d-fens GmbH</copyright>
+    <language>en-US</language>
+    <tags>dfch PowerShell Azure Service Bus Client</tags>
+    <dependencies>
+      <dependency id="biz.dfch.PS.System.Logging" version="1.0.5" />
+      <dependency id="biz.dfch.PS.System.Utilities" version="1.0.7" />
+    </dependencies>
+  </metadata>
+  <files xmlns="">
+    <file src="Install.ps1" target="Install.ps1" />
+    <file src="..\LICENSE" target="tools\LICENSE" />
+    <file src="..\NOTICE" target="tools\NOTICE" />
+    <file src="..\README.md" target="tools\README.md" />
+    <file src="biz.dfch.PS.Azure.ServiceBus.Client.psm1" target="tools\biz.dfch.PS.Azure.ServiceBus.Client.psm1" />
+    <file src="biz.dfch.PS.Azure.ServiceBus.Client.psd1" target="tools\biz.dfch.PS.Azure.ServiceBus.Client.psd1" />
+    <file src="biz.dfch.PS.Azure.ServiceBus.Client.xml" target="tools\biz.dfch.PS.Azure.ServiceBus.Client.xml" />
+    <file src="Enter-ServiceBus.ps1" target="tools\Enter-ServiceBus.ps1" />
+    <file src="Import-Module.ps1" target="tools\Import-Module.ps1" />
+    <file src="Get-Message.ps1" target="tools\Get-Message.ps1" />
+    <file src="New-Message.ps1" target="tools\New-Message.ps1" />
+    <file src="New-MessageReceiver.ps1" target="tools\New-MessageReceiver.ps1" />
+    <file src="New-MessageSender.ps1" target="tools\New-MessageSender.ps1" />
+    <file src="..\packages\Microsoft.WindowsAzure.ConfigurationManager.2.0.0.0\lib\net40\Microsoft.WindowsAzure.Configuration.dll" target="tools\Microsoft.WindowsAzure.Configuration.dll" />
+    <file src="..\packages\ServiceBus.v1_1.1.0.5\lib\net40-full\Microsoft.ServiceBus.dll" target="tools\Microsoft.ServiceBus.dll" />
+    <file src="..\packages\ServiceBus.v1_1.1.0.5\lib\net40-full\Microsoft.ServiceBus.xml" target="tools\Microsoft.ServiceBus.xml" />
+  </files>
+</package>
