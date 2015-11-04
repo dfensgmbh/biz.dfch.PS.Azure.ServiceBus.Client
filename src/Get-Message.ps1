@@ -47,16 +47,21 @@ Param
 	[ValidateSet('PeekLock', 'ReceiveAndDelete')]
 	[string] $Receivemode = 'PeekLock'
 	,
+	# [Optional] ReceiveAndDelete same as Receivemode 'ReceiveAndDelete'. If you do not specify this 
+	# value it is taken from the default parameter.
+	[Parameter(Mandatory = $false, Position = 3)]
+	[switch] $ReceiveAndDelete = $false
+	,
 	# [Optional] The QueueName such as 'MyQueue'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 3)]
+	[Parameter(Mandatory = $false, Position = 4)]
 	[ValidateNotNullorEmpty()]
 	[string] $QueueName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultQueueName
 	, 
 	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
 	# which to perform login. Default is credential as specified in the module 
 	# configuration file.
-	[Parameter(Mandatory = $false, Position = 4)]
+	[Parameter(Mandatory = $false, Position = 5)]
 	[alias("cred")]
 	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
 )
@@ -78,7 +83,9 @@ PROCESS
 try 
 {
 	# Parameter validation
-	# N/A
+	if ( $ReceiveAndDelete ) {
+		$Receivemode = 'ReceiveAndDelete';
+	}
 	
 	# Create MessageClient
 	try {

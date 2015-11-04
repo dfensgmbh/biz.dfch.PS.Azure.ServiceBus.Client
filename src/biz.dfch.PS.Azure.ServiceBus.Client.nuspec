@@ -32,7 +32,6 @@ See https://github.com/dfensgmbh/biz.dfch.PS.Azure.ServiceBus.Client/wiki for a 
     <tags>dfch PowerShell Azure Service Bus Client</tags>
     <dependencies>
       <dependency id="biz.dfch.PS.System.Logging" version="1.0.5" />
-      <dependency id="biz.dfch.PS.System.Utilities" version="1.0.7" />
     </dependencies>
   </metadata>
   <files xmlns="">
@@ -43,7 +42,7 @@ See https://github.com/dfensgmbh/biz.dfch.PS.Azure.ServiceBus.Client/wiki for a 
     <file src="biz.dfch.PS.Azure.ServiceBus.Client.psm1" target="tools\biz.dfch.PS.Azure.ServiceBus.Client.psm1" />
     <file src="biz.dfch.PS.Azure.ServiceBus.Client.psd1" target="tools\biz.dfch.PS.Azure.ServiceBus.Client.psd1" />
     <file src="biz.dfch.PS.Azure.ServiceBus.Client.xml" target="tools\biz.dfch.PS.Azure.ServiceBus.Client.xml" />
-    <file src="Enter-ServiceBus.ps1" target="tools\Enter-ServiceBus.ps1" />
+    <file src="Enter-Server.ps1" target="tools\Enter-Server.ps1" />
     <file src="Import-Module.ps1" target="tools\Import-Module.ps1" />
     <file src="Get-Message.ps1" target="tools\Get-Message.ps1" />
     <file src="New-Message.ps1" target="tools\New-Message.ps1" />

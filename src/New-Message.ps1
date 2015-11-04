@@ -40,30 +40,30 @@ Param
 	[string] $MessageLabel
 	, 
 	# [Optional] Sets addional message properties.
-	[Parameter(Mandatory = $false, Position = 1)]
+	[Parameter(Mandatory = $false, Position = 2)]
 	[hashtable] $MessageProperties
 	, 
 	# [Optional] The TimeToLive is the duration after which the message expires, starting from when the message is sent to the Service Bus.
-	[Parameter(Mandatory = $false, Position = 2)]
+	[Parameter(Mandatory = $false, Position = 3)]
 	[ValidateNotNullorEmpty()]
 	[int] $MessageTimeToLiveSec
 	, 
 	# [Optional] The QueueName such as 'MyQueue'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 3)]
+	[Parameter(Mandatory = $false, Position = 4)]
 	[ValidateNotNullorEmpty()]
 	[string] $QueueName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultQueueName
 	, 
 	# [Optional] The Format such as 'JSON'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 4)]
+	[Parameter(Mandatory = $false, Position = 5)]
 	[ValidateNotNullorEmpty()]
 	[string] $MessageFormat = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Format
 	, 
 	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
 	# which to perform login. Default is credential as specified in the module 
 	# configuration file.
-	[Parameter(Mandatory = $false, Position = 5)]
+	[Parameter(Mandatory = $false, Position = 6)]
 	[alias("cred")]
 	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
 )
@@ -101,14 +101,14 @@ try
 	$MessageBody = $Message.ToString();
 	# switch($MessageFormat) 
 	# {
-		# 'xml' { $InputParameter = (ConvertTo-Xml -InputObject $Message).OuterXml; }
-		# 'xml-pretty' { $InputParameter = Format-Xml -String (ConvertTo-Xml -InputObject $Message).OuterXml; }
-		# 'json' { $InputParameter = ConvertTo-Json -InputObject $Message -Compress; }
-		# 'json-pretty' { $InputParameter = ConvertTo-Json -InputObject $Message; }
-		# Default { $InputParameter = $Message; }
+		# 'xml' { $MessageBody = (ConvertTo-Xml -InputObject $Message).OuterXml; }
+		# 'xml-pretty' { $MessageBody = Format-Xml -String (ConvertTo-Xml -InputObject $Message).OuterXml; }
+		# 'json' { $MessageBody = ConvertTo-Json -InputObject $Message -Compress; }
+		# 'json-pretty' { $MessageBody = ConvertTo-Json -InputObject $Message; }
+		# Default { $MessageBody = $Message; }
 	# }
 	
-	Log-Debug $fn ("-> InputParameter '{0}'; Type '{1}'" -f $InputParameter.toString(), $InputParameter.GetType() );
+	Log-Debug $fn ("-> MessageBody '{0}'; Type '{1}'" -f $MessageBody.toString(), $MessageBody.GetType() );
 	Log-Debug $fn ("-> As '{0}'; Type '{1}'" -f $MessageFormat.toString(), $MessageFormat.GetType() );
 		
 	# Create Message

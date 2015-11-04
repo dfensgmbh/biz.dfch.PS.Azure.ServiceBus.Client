@@ -37,7 +37,7 @@ PowerShellVersion = '3.0'
 # PowerShellHostVersion = ''
 
 # Minimum version of the .NET Framework required by this module
-DotNetFrameworkVersion = '4.5'
+DotNetFrameworkVersion = '4.0'
 
 # Minimum version of the common language runtime (CLR) required by this module
 # CLRVersion = ''
@@ -52,9 +52,9 @@ RequiredModules = @(
 
 # Assemblies that must be loaded prior to importing this module
 RequiredAssemblies = @(
-	'Microsoft.WindowsAzure.Configuration.dll'
-	,
 	'Microsoft.ServiceBus.dll'
+	,
+	'Microsoft.WindowsAzure.Configuration.dll'
 	,
 	'System.Net'
 	,
@@ -78,7 +78,7 @@ ScriptsToProcess = @(
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
 NestedModules = @(
-	'Enter-ServiceBus.ps1'
+	'Enter-Server.ps1'
 	,
 	'Get-Message.ps1'
 	,

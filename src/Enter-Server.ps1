@@ -1,4 +1,4 @@
-function Enter-ServiceBus {
+function Enter-Server {
 <#
 .SYNOPSIS
 Performs a login to the Service Bus Message Factory.
@@ -19,7 +19,7 @@ See PARAMETER section for a description of input parameters.
 
 
 .EXAMPLE
-$svc = Enter-ServiceBus;
+$svc = Enter-Server;
 $svc
 
 Performs a login to the Service Bus Message Factory with default credentials (current user) and against server defined within module configuration xml file.
@@ -43,20 +43,25 @@ Param
 	[Parameter(Mandatory = $false, Position = 1)]
 	[int] $RuntimePort = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).RuntimePort
 	, 
-	# [Optional] The ManagementPort such as '123'. If you do not specify this 
+	# [Optional] The SharedAccessKeyName. If you do not specify this 
 	# value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 2)]
-	[int] $ManagementPort = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).ManagementPort	
+	[string] $SharedAccessKeyName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKeyName	
+	,
+	# [Optional] The SharedAccessKey. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 3)]
+	[string] $SharedAccessKey = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKey	
 	,
 	# [Optional] The Namespace such as 'ServiceBusDefaultNamespace'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 3)]
+	[Parameter(Mandatory = $false, Position = 4)]
 	[string] $Namespace = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultNameSpace
 	, 
 	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
 	# which to perform login. Default is credential as specified in the module 
 	# configuration file.
-	[Parameter(Mandatory = $false, Position = 4)]
+	[Parameter(Mandatory = $false, Position = 5)]
 	[alias("cred")]
 	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
 )
@@ -79,11 +84,14 @@ try
 	# Parameter validation
 	# N/A
 	
-	# Prepare connection string
-	$ConnectionString = 'Endpoint=sb://{0}/{1};StsEndpoint=https://{0}:{3}/{1};RuntimePort={2};ManagementPort={3}' -f $EndpointServerName, $Namespace, $RuntimePort, $ManagementPort;
+	# Prepare connection string	
+	$ConnectionURI = 'sb://{0}:{2}/{1}' -f $EndpointServerName, $Namespace, $RuntimePort;
 	
+	# Create tokeb provider
+	$TokenProvider = [Microsoft.ServiceBus.TokenProvider]::CreateSharedAccessSignatureTokenProvider($SharedAccessKeyName, $SharedAccessKey);
 	# Create message factory
-	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageFactory = [Microsoft.ServiceBus.Messaging.MessagingFactory]::CreateFromConnectionString($ConnectionString);
+	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageFactory = [Microsoft.ServiceBus.Messaging.MessagingFactory]::Create($ConnectionURI, $TokenProvider);
+	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient = $null;
 	
 	$OutputParameter = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageFactory;
 	$fReturn = $true;
@@ -147,9 +155,7 @@ END
 
 } # function
 
-Set-Alias -Name Connect- -Value 'Enter-ServiceBus';
-Set-Alias -Name Enter- -Value 'Enter-ServiceBus';
-if($MyInvocation.ScriptName) { Export-ModuleMember -Function Enter-ServiceBus -Alias Connect-, Enter-; } 
+if($MyInvocation.ScriptName) { Export-ModuleMember -Function Enter-Server; } 
 
 # 
 # Copyright 2014-2015 d-fens GmbH
