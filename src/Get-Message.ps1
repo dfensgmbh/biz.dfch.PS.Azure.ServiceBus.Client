@@ -58,10 +58,14 @@ Param
 	[ValidateNotNullorEmpty()]
 	[string] $QueueName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultQueueName
 	, 
+	# [Optional] MessageClient
+	[Parameter(Mandatory = $false, Position = 5)]
+	$MessageClient
+	,
 	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
 	# which to perform login. Default is credential as specified in the module 
 	# configuration file.
-	[Parameter(Mandatory = $false, Position = 5)]
+	[Parameter(Mandatory = $false, Position = 6)]
 	[alias("cred")]
 	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
 )
@@ -89,7 +93,9 @@ try
 	
 	# Create MessageClient
 	try {
-		$MessageClient = New-MessageReceiver -QueueName $QueueName -Receivemode $Receivemode;
+		if ( !$PSBoundParameters.ContainsKey('MessageClient') ) {
+			$MessageClient = New-MessageReceiver -QueueName $QueueName -Receivemode $Receivemode;
+		}
 	} catch {
 		$msg = $_.Exception.Message;
 		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $MessageClient;
