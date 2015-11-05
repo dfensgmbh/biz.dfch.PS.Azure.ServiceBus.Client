@@ -119,8 +119,8 @@ try
 		
 	# Create Message
 	[Microsoft.ServiceBus.Messaging.BrokeredMessage] $BrokeredMessage = [Microsoft.ServiceBus.Messaging.BrokeredMessage]($MessageBody.ToString());
-	$BrokeredMessage.Properties['Body'] = $MessageBody.ToString();
-	$BrokeredMessage.Properties['BodyAs'] = $MessageFormat.ToString();
+	#$BrokeredMessage.Properties['Body'] = $MessageBody.ToString();
+	#$BrokeredMessage.Properties['BodyAs'] = $MessageFormat.ToString();
 	if ( $PSBoundParameters.ContainsKey('MessageProperties') ) {
 		foreach ( $MessageProperty in $MessageProperties.GetEnumerator() ) {
 			$BrokeredMessage.Properties[$MessageProperty.Name] = $MessageProperty.Value.ToString();
