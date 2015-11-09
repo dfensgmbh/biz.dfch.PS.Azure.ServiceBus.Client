@@ -52,20 +52,35 @@ Param
 	[Parameter(Mandatory = $false, Position = 3)]
 	[switch] $ReceiveAndDelete = $false
 	,
+	# [Optional] ReceiveAndComplete same as Receivemode 'PeekLock' and $Message.Complete(). If you do not specify this 
+	# value it is taken from the default parameter.
+	[Parameter(Mandatory = $false, Position = 4)]
+	[switch] $ReceiveAndComplete = $false
+	,
+	# [Optional] ReceiveAndAbandon same as Receivemode 'PeekLock' and $Message.Abandon(). If you do not specify this 
+	# value it is taken from the default parameter.
+	[Parameter(Mandatory = $false, Position = 5)]
+	[switch] $ReceiveAndAbandon = $false
+	,
+	# [Optional] BodyAsProperty writes the Message Body to Property 'Body'. If you do not specify this 
+	# value it is taken from the default parameter.
+	[Parameter(Mandatory = $false, Position = 6)]
+	[switch] $BodyAsProperty = $false
+	,
 	# [Optional] The QueueName such as 'MyQueue'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 4)]
+	[Parameter(Mandatory = $false, Position = 7)]
 	[ValidateNotNullorEmpty()]
 	[string] $QueueName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultQueueName
 	, 
 	# [Optional] MessageClient
-	[Parameter(Mandatory = $false, Position = 5)]
+	[Parameter(Mandatory = $false, Position = 8)]
 	$MessageClient
 	,
 	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
 	# which to perform login. Default is credential as specified in the module 
 	# configuration file.
-	[Parameter(Mandatory = $false, Position = 6)]
+	[Parameter(Mandatory = $false, Position = 9)]
 	[alias("cred")]
 	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
 )
@@ -105,6 +120,26 @@ try
 	
 	# Get Message
 	[Microsoft.ServiceBus.Messaging.BrokeredMessage] $BrokeredMessage = $MessageClient.Receive((New-TimeSpan -Seconds $WaitTimeoutSec));
+	if ( $ReceiveAndAbandon -and $Receivemode -ne 'ReceiveAndDelete' ) {
+		$BrokeredMessage.Abandon();
+	}
+	if ( $ReceiveAndComplete -and $Receivemode -ne 'ReceiveAndDelete' ) {
+		$BrokeredMessage.Complete();
+	}
+	if ( $BodyAsProperty ) {
+		$PropertyName = 'Body';
+		$PropertyValue = Get-SBMessageBody $BrokeredMessage
+		if ( $BrokeredMessage.Properties.ContainsKey($PropertyName) -and $BrokeredMessage.Properties[$PropertyName].toString() -ne $PropertyValue.toString() ) {
+			[int] $PropertyCount = 1;
+			$PropertyName = ("Body{0}" -f $PropertyCount);
+			while( $BrokeredMessage.Properties.ContainsKey($PropertyName) ){
+				$PropertyCount += 1;
+				$PropertyName = ("Body{0}" -f $PropertyCount);
+			}
+		}
+		$BrokeredMessage.Properties[$PropertyName] = $PropertyValue;
+	}
+	$BodyAsProperty = $false
 	$OutputParameter = $BrokeredMessage;
 	$fReturn = $true;
 

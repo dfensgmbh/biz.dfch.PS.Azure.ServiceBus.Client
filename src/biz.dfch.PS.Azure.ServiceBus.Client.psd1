@@ -82,6 +82,8 @@ NestedModules = @(
 	,
 	'Get-Message.ps1'
 	,
+	'Get-MessageBody.ps1'
+	,
 	'New-Message.ps1'
 	,
 	'New-MessageReceiver.ps1'
