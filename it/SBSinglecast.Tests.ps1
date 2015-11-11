@@ -8,11 +8,11 @@ function Stop-Pester($message = "EMERGENCY: Script cannot continue.")
 	$PSCmdlet.ThrowTerminatingError($e);
 }
 
-Describe -Tags "SBClient.Tests" "SBClient.Tests" {
+Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 
 	Mock Export-ModuleMember { return $null; }
 	
-	Context "SBClientQueue.Tests" {
+	Context "SBClientSinglecast.Tests" {
 		
 		BeforeEach {		
 			# Management module for service bus - required to create, check and delete queues/topis/subscriptions
@@ -25,7 +25,7 @@ Describe -Tags "SBClient.Tests" "SBClient.Tests" {
 			
 			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
 			# Import Modul from git repo
-			Import-Module "$here\$moduleName.psd1" -Force
+			Import-Module "$here\..\src\$moduleName.psd1" -Force
 			# Set variable to the loacal environment
 			$biz_dfch_PS_Azure_ServiceBus_Client.EndpointServerName = (Get-SBFarm).Hosts[0].Name;
 			$biz_dfch_PS_Azure_ServiceBus_Client.DefaultNameSpace = (Get-SBNamespace).Name;

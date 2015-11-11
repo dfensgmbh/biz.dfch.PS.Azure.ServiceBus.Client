@@ -8,7 +8,7 @@ function Stop-Pester($message = "EMERGENCY: Script cannot continue.")
 	$PSCmdlet.ThrowTerminatingError($e);
 }
 
-Describe -Tags "SBClient.Tests" "SBClient.Tests" {
+Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 
 	Mock Export-ModuleMember { return $null; }
 	
@@ -17,7 +17,7 @@ Describe -Tags "SBClient.Tests" "SBClient.Tests" {
 	# . "$here\Get-Message.ps1"
 	# . "$here\ServcieBusClientTest.ps1"
 	
-	Context "SBClientQueue.Tests" {
+	Context "SBClientBroadcast.Tests" {
 		
 		BeforeEach {		
 			# Management module for service bus - required to create, check and delete queues/topis/subscriptions
@@ -81,15 +81,17 @@ Describe -Tags "SBClient.Tests" "SBClient.Tests" {
 			$messageText1 = "TestMessageBroadcast"
 			
 			# Act Send Message
-			$messageAmount = 0;
+			$messageAmount = 1;
 			$newSBMessage1 = New-SBMessage $messageText1 -QueueName $topicName -MessageClient $newSender1;
 			
 			# Get Message count from the subscriptions
 			$getSubscriptions = New-Object System.Collections.ArrayList;
 			foreach ($sub in Get-SBSubscriptions -TopicPath $topicName ) {
+				write-host $sub;
 				$getSubscriptions.Add($sub);
 			}
 				
+			
 			# Act Receive Message
 			$null = Wait-Job -Job $newJobs;
 			$jobResults = Receive-Job $newJobs;
