@@ -1,5 +1,4 @@
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-# $sut = (Split-Path -Leaf $MyInvocation.MyCommand.Path).Replace(".Tests.", ".")
 
 function Stop-Pester($message = "EMERGENCY: Script cannot continue.")
 {
@@ -53,7 +52,7 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 				
 		It "NewMessages-Broadcast" -Test {
 			# Arrange MessageReceiver (separate sessions)
-			$receiveMode = 'ReceiveAndDelete';
+			$receiveMode = 'PeekLock';
 			$waitTimeoutSec = 10;
 			$amountOfReceiver = 5;
 			$pathMessageHelper = "$here\getMessageHelper.ps1"
@@ -87,10 +86,8 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			# Get Message count from the subscriptions
 			$getSubscriptions = New-Object System.Collections.ArrayList;
 			foreach ($sub in Get-SBSubscriptions -TopicPath $topicName ) {
-				write-host $sub;
 				$getSubscriptions.Add($sub);
 			}
-				
 			
 			# Act Receive Message
 			$null = Wait-Job -Job $newJobs;
