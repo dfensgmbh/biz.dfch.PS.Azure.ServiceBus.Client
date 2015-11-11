@@ -3,26 +3,19 @@ function Get-Message {
 .SYNOPSIS
 Creates a message for the Service Bus Message Factory.
 
-
 .DESCRIPTION
 Creates a message for the Service Bus Message Factory.
-
 
 .OUTPUTS
 This Cmdlet returns the SequenceNumber from the MessageFactory Message object. On failure it returns $null.
 
-
 .INPUTS
 See PARAMETER section for a description of input parameters.
 
-
 .EXAMPLE
 $message = Get-Message;
-$message
 
 Creates a message for the Service Bus Message Factory and against server defined within module configuration xml file.
-
-	
 #>
 [CmdletBinding(
 	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
@@ -39,7 +32,7 @@ Param
 	# value it is taken from the default value = 3 sec.
 	[Parameter(Mandatory = $false, Position = 1)]
 	[ValidateNotNullorEmpty()]
-	[int] $WaitTimeoutSec = 3
+	[int] $WaitTimeoutSec = [int]::MaxValue
 	, 
 	# [Optional] The Receivemode such as 'PeekLock'. If you do not specify this 
 	# value it is taken from the default parameter.
@@ -102,37 +95,49 @@ PROCESS
 try 
 {
 	# Parameter validation
-	if ( $ReceiveAndDelete ) {
+	if ( $ReceiveAndDelete ) 
+	{
 		$Receivemode = 'ReceiveAndDelete';
 	}
 	
 	# Create MessageClient
-	try {
-		if ( !$PSBoundParameters.ContainsKey('MessageClient') ) {
+	if ( !$PSBoundParameters.ContainsKey('MessageClient') ) 
+	{
+		try 
+		{
 			$MessageClient = New-MessageReceiver -QueueName $QueueName -Receivemode $Receivemode;
+		} 
+		catch 
+		{
+			$msg = $_.Exception.Message;
+			$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $MessageClient;
+			Log-Error $fn -msg $msg;
+			$PSCmdlet.ThrowTerminatingError($e);
 		}
-	} catch {
-		$msg = $_.Exception.Message;
-		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $MessageClient;
-		Log-Error $fn -msg $msg;
-		$PSCmdlet.ThrowTerminatingError($e);
 	}
 	
 	# Get Message
+	# DFTODO - is this really an AMQP message when we are using the BrokeredMessage class?, see #5
 	[Microsoft.ServiceBus.Messaging.BrokeredMessage] $BrokeredMessage = $MessageClient.Receive((New-TimeSpan -Seconds $WaitTimeoutSec));
-	if ( $ReceiveAndAbandon -and $Receivemode -ne 'ReceiveAndDelete' ) {
+	if ( $ReceiveAndAbandon -and $Receivemode -ne 'ReceiveAndDelete' ) 
+	{
 		$BrokeredMessage.Abandon();
 	}
-	if ( $ReceiveAndComplete -and $Receivemode -ne 'ReceiveAndDelete' ) {
+	if ( $ReceiveAndComplete -and $Receivemode -ne 'ReceiveAndDelete' ) 
+	{
 		$BrokeredMessage.Complete();
 	}
-	if ( $BodyAsProperty ) {
+
+	if ( $BodyAsProperty ) 
+	{
 		$PropertyName = 'Body';
 		$PropertyValue = Get-SBMessageBody $BrokeredMessage
-		if ( $BrokeredMessage.Properties.ContainsKey($PropertyName) -and $BrokeredMessage.Properties[$PropertyName].toString() -ne $PropertyValue.toString() ) {
+		if ( $BrokeredMessage.Properties.ContainsKey($PropertyName) -and $BrokeredMessage.Properties[$PropertyName].toString() -ne $PropertyValue.toString() ) 
+		{
 			[int] $PropertyCount = 1;
 			$PropertyName = ("Body{0}" -f $PropertyCount);
-			while( $BrokeredMessage.Properties.ContainsKey($PropertyName) ){
+			while( $BrokeredMessage.Properties.ContainsKey($PropertyName) )
+			{
 				$PropertyCount += 1;
 				$PropertyName = ("Body{0}" -f $PropertyCount);
 			}
@@ -142,7 +147,6 @@ try
 	$BodyAsProperty = $false
 	$OutputParameter = $BrokeredMessage;
 	$fReturn = $true;
-
 }
 catch 
 {
