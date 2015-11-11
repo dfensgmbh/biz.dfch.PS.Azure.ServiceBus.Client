@@ -1,124 +1,4 @@
-
-$here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$sut = (Split-Path -Leaf $MyInvocation.MyCommand.Path).Replace(".Tests.", ".")
-
-function Stop-Pester($message = "EMERGENCY: Script cannot continue.")
-{
-	$msg = $message;
-	$e = New-CustomErrorRecord -msg $msg -cat OperationStopped -o $msg;
-	$PSCmdlet.ThrowTerminatingError($e);
-}
-
-Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
-
-	Mock Export-ModuleMember { return $null; }
-	
-	. "$here\$sut"
-	
-	Context "SBClientBroadcast.Tests" {
-		
-		BeforeEach {		
-			# Management module for service bus - required to create, check and delete queues/topis/subscriptions
-			$moduleName = 'biz.dfch.PS.Azure.ServiceBus.Setup';
-			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
-			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Setup -ErrorAction:SilentlyContinue;
-			Import-Module $moduleName -ErrorAction:SilentlyContinue;
-			
-			# Set Modulname
-			$moduleName = 'biz.dfch.PS.Azure.ServiceBus.Client'
-			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
-			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Client -ErrorAction:SilentlyContinue;
-			Import-Module "$here\..\src\$moduleName.psd1"  -ErrorAction:SilentlyContinue -Force;
-			
-			# Set variable to the loacal environment
-			$biz_dfch_PS_Azure_ServiceBus_Client.EndpointServerName = (Get-SBFarm).Hosts[0].Name;
-			$biz_dfch_PS_Azure_ServiceBus_Client.DefaultNameSpace = (Get-SBNamespace).Name;
-			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKeyName = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.DefaultNameSpace -Name RootManageSharedAccessKey).KeyName;
-			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.DefaultNameSpace -Name RootManageSharedAccessKey).PrimaryKey;
-			
-			# Create Topic
-			$topicName = "PesterTestTopic";
-			New-SBTopic -Path $topicName;
-			
-			# Enter Servicebus
-			$enterSBServer = Enter-SBServer;
-		}
-		
-		AfterEach {
-			#Cleanup
-			Remove-SBTopic -Path $topicName -force;
-		}
-				
-		It "NewMessages-Broadcast" -Test {
-			# Arrange MessageReceiver (separate sessions)
-			$receiveMode = 'PeekLock';
-			$waitTimeoutSec = 10;
-			$amountOfReceiver = 5;
-			$pathMessageHelper = "$here\getMessageHelper.ps1"
-			$newJobs = New-Object System.Collections.ArrayList
-			$subscriptionPaths = New-Object System.Collections.ArrayList
-			
-			for ($i=1; $i -le $amountOfReceiver; $i++)
-			{
-				# Arrange Subscriptions
-				$subscriptionName = 'PesterTestSub{1}' -f $i;
-				$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
-				$subscriptionPaths.Add($subscriptionPath);
-				
-				New-SBSubscription -TopicPath $topicName -Name $subscriptionName;
-				
-				# Arrange Receive Sessions
-				$jobString = '{0} -Path "{1}" -WaitTimeoutSec {2} -Receivemode "{3}"' -f $pathMessageHelper, $subscriptionPaths[$i-1], $WaitTimeoutSec, $receiveMode;
-				$jobString = [Scriptblock]::Create($jobString)
-				$job = Start-Job -ScriptBlock $jobString;
-				$newJobs.Add($job);
-			}
-			
-			# Arrange MessageSender
-			$newSender1 = New-SBMessageSender -QueueName $topicName;
-			
-			# Arrange Message
-			$messageText1 = "TestMessageBroadcast"
-			
-			# Act Send Message
-			$messageAmount = 1;
-			$newSBMessage1 = New-SBMessage $messageText1 -QueueName $topicName -MessageClient $newSender1;
-			
-			# Get Message count from the subscriptions
-			$getSubscriptions = New-Object System.Collections.ArrayList;
-			# DFTODO - what is this for? 
-			# if I understand this code correctly, "Get-SBSubscriptios" returns a list of subscriptions
-			# so this is already an array. Why do we then loop through it and add its items to an ArrayList?
-			foreach ($sub in Get-SBSubscriptions -TopicPath $topicName ) 
-			{
-				$getSubscriptions.Add($sub);
-			}
-			
-			# Act Receive Message
-			$null = Wait-Job -Job $newJobs;
-			$jobResults = Receive-Job $newJobs;
-			
-			# Assert
-			$newSBMessage1 | Should Not Be $null;
-			$jobResults.Count | Should Be $amountOfReceiver;
-			
-			# Check subscriptions message count
-			foreach ($subscription in $getSubscriptions) 
-			{
-				$subscription.MessageCount | Should Be $messageAmount;
-			}
-			
-			# Check subscription messageId
-			foreach ($jobResult in $jobResults) 
-			{
-				$jobResult.MessageId  | Should Be $newSBMessage1;
-			}
-			
-			# Cleanup
-			Remove-Job $newJobs;
-		}
-	}
-}
+# This file intentionally left blank
 
 #
 # Copyright 2015 d-fens GmbH
@@ -139,8 +19,8 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 # SIG # Begin signature block
 # MIIXDwYJKoZIhvcNAQcCoIIXADCCFvwCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUZX5w8Xw+udMvWl6nNjqlG7YQ
-# 2tugghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUxYSSGDBuauk589wRQa9mOsDb
+# /UugghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
 # VzELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNV
 # BAsTB1Jvb3QgQ0ExGzAZBgNVBAMTEkdsb2JhbFNpZ24gUm9vdCBDQTAeFw0xMTA0
 # MTMxMDAwMDBaFw0yODAxMjgxMjAwMDBaMFIxCzAJBgNVBAYTAkJFMRkwFwYDVQQK
@@ -239,26 +119,26 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 # MDAuBgNVBAMTJ0dsb2JhbFNpZ24gQ29kZVNpZ25pbmcgQ0EgLSBTSEEyNTYgLSBH
 # MgISESENFrJbjBGW0/5XyYYR5rrZMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEM
 # MQowCKACgAChAoAAMBkGCSqGSIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQB
-# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBTw3JlKeHQiw2lA
-# 2iJee4jfe1ok0zANBgkqhkiG9w0BAQEFAASCAQDBSK+A2XFr+NaI3FLcxOBVbQU/
-# aMfGJGwzAABNVWoanByc8XE6MuZ+5yXdvdeXZITHAFxrwRe7R2N6+5EcjQGWAzJi
-# HyKTZ2T5tFXBi9qJPTTKytbdYtMOJeWClr9v15iHJcOjaba4IWFxcX7n3k7fspI2
-# +ePobEIdGl7kSNMNEd8e3GgIN2EUUu6xkOPycP0Alw4oMsd+E+RV2qJyGn6ukIoW
-# +WoPCtFySmIH9vI7xP5F7T0nl1csaJtj00eSu7qREwUdefszhqDyadKmDCLus1bS
-# dSnSktG5UuVndbfFJXlssxRC4cPsvtedToZteJ08p/FWbvOZ9tQMESSZkklmoYIC
+# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBTBhDiDGg1+2tXG
+# W1CaMajnolVNcTANBgkqhkiG9w0BAQEFAASCAQA6IqoJGL0LejPPGy2/JnswJApo
+# KXoFpFPM3cpSDUc24OFMfMRnwnCVWrjSuFVsRXMVKaj0Rs+P83zHxqqla8WGB9Vk
+# bvcCVT0R4ixP84y9xk92oSZLc4alfLEOULqfqTbeK7yKVDpsNO5WoaarXu7pGAEZ
+# OMA1XvWC1srJyTeg/KxVYAEFZULJ9kjwhO3oghLBqDl7bP+C7A5e+ndmOYPJowUk
+# AN0ubOEZb81WVCb0oq/Kav/N2v2szxENN/Y0cix5Xx9qjRwOd750yRDs673W9K8P
+# GMvuOX6TOqLpR3TxYMk2c6Qkd+YkvzjWoppRAniWJtCNcPDzMMZdZ0Mdys6noYIC
 # ojCCAp4GCSqGSIb3DQEJBjGCAo8wggKLAgEBMGgwUjELMAkGA1UEBhMCQkUxGTAX
 # BgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGlt
 # ZXN0YW1waW5nIENBIC0gRzICEhEhBqCB0z/YeuWCTMFrUglOAzAJBgUrDgMCGgUA
 # oIH9MBgGCSqGSIb3DQEJAzELBgkqhkiG9w0BBwEwHAYJKoZIhvcNAQkFMQ8XDTE1
-# MTAyODE0MjA0NlowIwYJKoZIhvcNAQkEMRYEFPKGbdv4mF14VLiWolIKpcIGtFoF
+# MTAyODE0MjA1MVowIwYJKoZIhvcNAQkEMRYEFJWHSVx2J2n0ni0D6yrsSY4/6sWy
 # MIGdBgsqhkiG9w0BCRACDDGBjTCBijCBhzCBhAQUs2MItNTN7U/PvWa5Vfrjv7Es
 # KeYwbDBWpFQwUjELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYt
 # c2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGltZXN0YW1waW5nIENBIC0gRzICEhEh
-# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQBy7ufxDEu0kJPJ9whi
-# dhkVPCQP+gc13hOgcjAx+K8Nc+S6jofZa7dfZTI5eABZ7aDpULGQYMW8WnK8gCSL
-# HDOxHmuPOww5c7K/VBaF5Ttrt3ZO+WH8BWp1H3F7GSBJLOrzFF66AF7IhKKvmFoo
-# GegWpNuLJYAVfIy8DfkRIB9ttulWSuA7tT/4rgL5S+2rUHOi3H+GWPsBpUt+b1v/
-# koBcdbApcW/r8n6OtKqHP+PfZL9w/KYyYafr5UrlgRxSjKN+5v+viUfD3UsOrUxV
-# LetMozQxlYdZmyr3xU+exTAcaIyfvdukC/pDLMUsyJLii4ZaR5Zt9tJOzjJyxsFM
-# 034o
+# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQCbcKXeI4z6LLz7dV3E
+# zxllTTpeuo+4f4Xm/hyU8eQgwFKVLXpmsvfwnFUxMvPe6XzMEcazaiEu9LT4TVh1
+# 6+tkoU2ZM1bmuCp6RyaprY+2r+QefS39blUWYHc9weJpriSomHvIRrWoQBT1O6SV
+# ujJXdC/G8mxQVsTFg9zAaitjMh9CguOlSyj5Ob0bYZNCqqX9I4ZbzU2PNZIfpjwY
+# Ts8LVXP9Nu5URIWPwxpSs1NBmsvPZUG5Y1Tt+uVBg9+z4ncSKA8ccTLkn99Qfaij
+# Wob5T8zlCvaVtSEjlIMtOeXkDz6bG41bPzcsLwkOkaHXFjooFVuBL8nDisRWYla8
+# qhRm
 # SIG # End signature block

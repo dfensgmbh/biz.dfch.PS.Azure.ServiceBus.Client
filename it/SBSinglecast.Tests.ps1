@@ -1,5 +1,5 @@
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-# $sut = (Split-Path -Leaf $MyInvocation.MyCommand.Path).Replace(".Tests.", ".")
+$sut = (Split-Path -Leaf $MyInvocation.MyCommand.Path).Replace(".Tests.", ".")
 
 function Stop-Pester($message = "EMERGENCY: Script cannot continue.")
 {
@@ -46,9 +46,10 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 		
 		It "NewMessages-Singlecast" -Test {
 			# Arrange Subscriptions
-			$subscriptionsName = "PesterTestSub";
-			$subscriptionsPath = $topicName +"\Subscriptions\"+$subscriptionsName;
-			New-SBSubscription -TopicPath $topicName -Name $subscriptionsName;
+			$subscriptionName = 'PesterTestSub';
+			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
+
+			New-SBSubscription -TopicPath $topicName -Name $subscriptionName;
 			
 			# Arrange MessageReceiver (separate sessions)
 			$receiveMode = 'ReceiveAndDelete';
@@ -57,8 +58,9 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 			$pathMessageHelper = "$here\getMessageHelper.ps1"
 			$newJobs = New-Object System.Collections.ArrayList
 			
-			for ($i=1; $i -le $amountOfReceiver; $i++){
-				$jobString = '{0} -Path "{1}" -WaitTimeoutSec {2} -Receivemode "{3}"' -f $pathMessageHelper, $subscriptionsPath, $WaitTimeoutSec, $receiveMode;
+			for ($i=1; $i -le $amountOfReceiver; $i++)
+			{
+				$jobString = '{0} -Path "{1}" -WaitTimeoutSec {2} -Receivemode "{3}"' -f $pathMessageHelper, $subscriptionPath, $WaitTimeoutSec, $receiveMode;
 				$jobString = [Scriptblock]::Create($jobString)
 				$job = Start-Job -ScriptBlock $jobString;
 				$newJobs.Add($job);
@@ -81,7 +83,7 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 			$jobResults = Receive-Job $newJobs;
 			
 			# Assert			
-			($jobResults | where { $_ -ne $null }).count | Should Be 2;
+			($jobResults | where { $_ -ne $null }).Count | Should Be 2;
 			$newSBMessage1 | Should Not Be $null;
 			$newSBMessage2 | Should Not Be $null;
 			$jobResults.MessageId -contains $newSBMessage1 | Should Be $true;

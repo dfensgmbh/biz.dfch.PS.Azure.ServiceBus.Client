@@ -17,10 +17,13 @@ Describe -Tags "SBClient.Tests" "SBClient.Tests" {
 		BeforeEach {
 			$moduleName = 'biz.dfch.PS.Azure.ServiceBus.Client';
 			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
-			Import-Module $moduleName;
+			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Client -ErrorAction:SilentlyContinue;
+			Import-Module $moduleName -ErrorAction:SilentlyContinue;
+			
 			$moduleName = 'biz.dfch.PS.Azure.ServiceBus.Setup';
 			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
-			Import-Module $moduleName;
+			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Setup -ErrorAction:SilentlyContinue;
+			Import-Module $moduleName -ErrorAction:SilentlyContinue;
 		}
 		
 		It "SBClient-Name" -Test {
