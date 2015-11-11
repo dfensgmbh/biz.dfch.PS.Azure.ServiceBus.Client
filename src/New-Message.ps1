@@ -3,26 +3,19 @@ function New-Message {
 .SYNOPSIS
 Creates a message for the Service Bus Message Factory.
 
-
 .DESCRIPTION
 Creates a message for the Service Bus Message Factory.
-
 
 .OUTPUTS
 This Cmdlet returns the SequenceNumber from the MessageFactory Message object. On failure it returns $null.
 
-
 .INPUTS
 See PARAMETER section for a description of input parameters.
 
-
 .EXAMPLE
 $messageid = New-Message;
-$messageid
 
 Creates a message for the Service Bus Message Factory and against server defined within module configuration xml file.
-
-	
 #>
 [CmdletBinding(
 	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
@@ -63,20 +56,13 @@ Param
 	# [Optional] MessageClient
 	[Parameter(Mandatory = $false, Position = 6)]
 	$MessageClient
-	, 
-	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
-	# which to perform login. Default is credential as specified in the module 
-	# configuration file.
-	[Parameter(Mandatory = $false, Position = 7)]
-	[alias("cred")]
-	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
 )
 
 BEGIN 
 {
 	$datBegin = [datetime]::Now;
 	[string] $fn = $MyInvocation.MyCommand.Name;
-	Log-Debug $fn ("CALL. QueueName '{0}'; Username '{1}'" -f $QueueName, $Credential.Username ) -fac 1;
+	Log-Debug $fn ("CALL. QueueName '{0}'" -f $QueueName ) -fac 1;
 
 }
 # BEGIN 
@@ -92,11 +78,15 @@ try
 	# N/A
 	
 	# Create MessageClient
-	try {
-		if ( !$PSBoundParameters.ContainsKey('MessageClient') ) {
+	try 
+	{
+		if ( !$PSBoundParameters.ContainsKey('MessageClient') ) 
+		{
 			$MessageClient = New-MessageSender -QueueName $QueueName;
 		}
-	} catch {
+	} 
+	catch 
+	{
 		$msg = $_.Exception.Message;
 		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $MessageClient;
 		Log-Error $fn -msg $msg;
@@ -121,21 +111,28 @@ try
 	[Microsoft.ServiceBus.Messaging.BrokeredMessage] $BrokeredMessage = [Microsoft.ServiceBus.Messaging.BrokeredMessage]($MessageBody.ToString());
 	#$BrokeredMessage.Properties['Body'] = $MessageBody.ToString();
 	#$BrokeredMessage.Properties['BodyAs'] = $MessageFormat.ToString();
-	if ( $PSBoundParameters.ContainsKey('MessageProperties') ) {
-		foreach ( $MessageProperty in $MessageProperties.GetEnumerator() ) {
+	if ( $PSBoundParameters.ContainsKey('MessageProperties') ) 
+	{
+		foreach ( $MessageProperty in $MessageProperties.GetEnumerator() ) 
+		{
 			$BrokeredMessage.Properties[$MessageProperty.Name] = $MessageProperty.Value.ToString();
 		}
 	}
-	if ( $PSBoundParameters.ContainsKey('MessageLabel') ) {
+	if ( $PSBoundParameters.ContainsKey('MessageLabel') ) 
+	{
 		$BrokeredMessage.Label = $MessageLabel;
 	}
-	if ( $PSBoundParameters.ContainsKey('MessageTimeToLiveSec') ) {
+	if ( $PSBoundParameters.ContainsKey('MessageTimeToLiveSec') ) 
+	{
 		$BrokeredMessage.TimeToLive = (New-TimeSpan -Seconds $MessageTimeToLiveSec);
 	}	
 	
-	try {
+	try 
+	{
 		$MessageClient.Send($BrokeredMessage);	
-	} catch {
+	} 
+	catch 
+	{
 		$msg = $_.Exception.Message;
 		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $MessageClient;
 		Log-Error $fn -msg $msg;

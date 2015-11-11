@@ -9,7 +9,7 @@ Get the message body from a Service Bus Message.
 
 
 .OUTPUTS
-This Cmdlet returns the Body as String from the MessageFactory Message object. On failure it returns $null.
+This Cmdlet returns the Body as [String] from the MessageFactory Message object. On failure it returns $null.
 
 
 .INPUTS
@@ -18,7 +18,6 @@ See PARAMETER section for a description of input parameters.
 
 .EXAMPLE
 $message = Get-MessageBody -Message (Get-Message);
-$message
 
 Get the message body from a Service Bus Message.
 Attention: 
@@ -32,7 +31,7 @@ Attention:
 Param 
 (
 	# [Required] Service Bus Message
-	[Parameter(Mandatory = $false, Position = 0)]
+	[Parameter(Mandatory = $true, Position = 0)]
 	[ValidateNotNullorEmpty()]
 	[Microsoft.ServiceBus.Messaging.BrokeredMessage] $Message
 )
@@ -57,10 +56,13 @@ try
 	#N/A
 
 	# Get Message Body
-	try {
+	try 
+	{
 		$OutputParameter = Invoke-SBGenericMethod -InputObject $Message -MethodName 'GetBody' -GenericType 'String';
 		$fReturn = $true;
-	} catch {
+	} 
+	catch 
+	{
 		$msg = $_.Exception.Message;
 		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $Message;
 		Log-Error $fn -msg $msg;
