@@ -57,11 +57,17 @@ Param
 	# value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 4)]
 	[string] $Namespace = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultNameSpace
+	,
+	# [Optional] The TransportType such as 'Amqp'. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 5)]
+	[ValidateSet('Amqp', 'NetMessaging')]
+	[string] $TransportType = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).TransportType
 	, 
 	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
 	# which to perform login. Default is credential as specified in the module 
 	# configuration file.
-	[Parameter(Mandatory = $false, Position = 5)]
+	[Parameter(Mandatory = $false, Position = 6)]
 	[alias("cred")]
 	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
 )
@@ -84,13 +90,23 @@ try
 	# Parameter validation
 	# N/A
 	
-	# Prepare connection string	
-	$ConnectionURI = 'sb://{0}:{2}/{1}' -f $EndpointServerName, $Namespace, $RuntimePort;
+	# Get local instance parameters
+	if ( !(!(Get-Module ServiceBus -EA SilentlyContinue)) -and $EndpointServerName -eq 'EndpointServerName' )
+	{
+		if ( (Get-SBFarm).Hosts[0].Name -eq $env:Computername ) 
+		{
+			$EndpointServerName = (Get-SBFarm).Hosts[0].Name;
+			$Namespace = (Get-SBNamespace).Name;
+			$SharedAccessKeyName = (Get-SBAuthorizationRule -NamespaceName (Get-SBNamespace).Name -Name RootManageSharedAccessKey).KeyName;
+			$SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName (Get-SBNamespace).Name -Name RootManageSharedAccessKey).PrimaryKey;
+		}
+	}
 	
-	# Create tokeb provider
-	$TokenProvider = [Microsoft.ServiceBus.TokenProvider]::CreateSharedAccessSignatureTokenProvider($SharedAccessKeyName, $SharedAccessKey);
+	# Prepare connection string	
+	$ConnectionString = 'Endpoint=sb://{0}/{1};RuntimePort={2};SharedAccessKeyName={3};SharedAccessKey={4};TransportType={5}' -f $EndpointServerName, $Namespace, $RuntimePort, $SharedAccessKeyName, $SharedAccessKey, $TransportType;
+	
 	# Create message factory
-	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageFactory = [Microsoft.ServiceBus.Messaging.MessagingFactory]::Create($ConnectionURI, $TokenProvider);
+	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageFactory = [Microsoft.ServiceBus.Messaging.MessagingFactory]::CreateFromConnectionString($ConnectionString);
 	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient = $null;
 	
 	$OutputParameter = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageFactory;

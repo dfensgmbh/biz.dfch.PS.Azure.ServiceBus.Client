@@ -27,34 +27,178 @@ Param
 	[Parameter(Mandatory = $true, Position = 0)]
 	[ValidateNotNullorEmpty()]
 	$Message
+	,
+	# [Optional] Set message id.
+	[Parameter(Mandatory = $false, Position = 1)]
+	[string] $MessageId
 	, 
 	# [Optional] Sets a application specific label.
-	[Parameter(Mandatory = $false, Position = 1)]
+	[Parameter(Mandatory = $false, Position = 2)]
 	[string] $MessageLabel
 	, 
 	# [Optional] Sets addional message properties.
-	[Parameter(Mandatory = $false, Position = 2)]
+	[Parameter(Mandatory = $false, Position = 3)]
 	[hashtable] $MessageProperties
 	, 
 	# [Optional] The TimeToLive is the duration after which the message expires, starting from when the message is sent to the Service Bus.
-	[Parameter(Mandatory = $false, Position = 3)]
+	[Parameter(Mandatory = $false, Position = 4)]
 	[ValidateNotNullorEmpty()]
 	[int] $MessageTimeToLiveSec
 	, 
-	# [Optional] The QueueName such as 'MyQueue'. If you do not specify this 
+	# [Optional] The Facility such as 'MyQueue'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 4)]
+	[Parameter(Mandatory = $false, Position = 5)]
 	[ValidateNotNullorEmpty()]
-	[string] $QueueName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultQueueName
+	[alias("queue")]
+	[alias("topic")]
+	[alias("QueueName")]
+	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultSendFacility
 	, 
 	# [Optional] The Format such as 'JSON'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 5)]
+	[Parameter(Mandatory = $false, Position = 6)]
 	[ValidateNotNullorEmpty()]
 	[string] $MessageFormat = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Format
 	, 
 	# [Optional] MessageClient
+	[Parameter(Mandatory = $false, Position = 7)]
+	$MessageClient
+	,
+	# [Optional] The CmdRetries. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory=$false, Position = 8)]
+	[int]$CmdRetries = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandRetries 
+	,
+	# [Optional] The CmdSecDelay. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory=$false, Position = 9)]
+	[int]$CmdSecDelay = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandSecDelay
+)
+
+BEGIN 
+{
+	$datBegin = [datetime]::Now;
+	[string] $fn = $MyInvocation.MyCommand.Name;
+	Log-Debug $fn ("CALL. Facility '{0}'" -f $Facility ) -fac 1;
+
+}
+# BEGIN 
+
+PROCESS 
+{
+
+	[boolean] $fReturn = $false;
+	[int] $CmdRetryCount = 0;
+
+	$Params = @{};
+	$ParamsList = (Get-Command -Name $MyInvocation.InvocationName).Parameters;
+	foreach ($key in $ParamsList.keys)
+	{
+		$var = Get-Variable -Name $key -ErrorAction SilentlyContinue;
+		if($var)
+		{
+			if ( @('CmdRetries', 'CmdSecDelay') -notcontains $($var.name) -and $var.value -ne $null -and $($var.value) -ne '' ) 
+			{
+				$Params.Add($($var.name), $var.value);
+			}
+		}
+	}
+	Log-Debug $fn ("Command [{0}] arguments: {1}" -f ($fn -replace 'Worker', ''), ($Params | Out-String));
+
+	while (-not $fReturn) {
+		try {
+			$OutputParameter = New-Message-Worker @Params;
+			$fReturn = $true;
+		} catch {
+			if ($CmdRetryCount -ge $CmdRetries) {
+				Log-Error $fn ("Command [{0}] failed the maximum number of {1} times." -f ($fn -replace 'Worker', ''), $CmdRetryCount);
+				throw;
+			} else {
+				Log-Error $fn ("Command [{0}] failed. Retrying in {1} seconds." -f ($fn -replace 'Worker', ''), $CmdSecDelay);
+				$CmdRetryCount++;
+				Start-Sleep ($CmdSecDelay * $CmdRetryCount);
+			}
+		}
+	}
+	return $OutputParameter;
+
+}
+# PROCESS
+
+END 
+{
+	$datEnd = [datetime]::Now;
+	Log-Debug -fn $fn -msg ("RET. fReturn: [{0}]. Execution time: [{1}]ms. Started: [{2}]." -f $fReturn, ($datEnd - $datBegin).TotalMilliseconds, $datBegin.ToString('yyyy-MM-dd HH:mm:ss.fffzzz')) -fac 2;
+}
+# END
+
+} # function
+if($MyInvocation.ScriptName) { Export-ModuleMember -Function New-Message; } 
+
+function New-Message-Worker {
+<#
+.SYNOPSIS
+Creates a message for the Service Bus Message Factory.
+
+.DESCRIPTION
+Creates a message for the Service Bus Message Factory.
+
+.OUTPUTS
+This Cmdlet returns the SequenceNumber from the MessageFactory Message object. On failure it returns $null.
+
+.INPUTS
+See PARAMETER section for a description of input parameters.
+
+.EXAMPLE
+$messageid = New-Message-Worker;
+
+Creates a message for the Service Bus Message Factory and against server defined within module configuration xml file.
+#>
+[CmdletBinding(
+	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
+)]
+[OutputType([string])]
+Param 
+(
+	# [Required] The Message such as 'Message 123'.
+	[Parameter(Mandatory = $true, Position = 0)]
+	[ValidateNotNullorEmpty()]
+	$Message
+	,
+	# [Optional] Set message id.
+	[Parameter(Mandatory = $false, Position = 1)]
+	[string] $MessageId
+	, 
+	# [Optional] Sets a application specific label.
+	[Parameter(Mandatory = $false, Position = 2)]
+	[string] $MessageLabel
+	, 
+	# [Optional] Sets addional message properties.
+	[Parameter(Mandatory = $false, Position = 3)]
+	[hashtable] $MessageProperties
+	, 
+	# [Optional] The TimeToLive is the duration after which the message expires, starting from when the message is sent to the Service Bus.
+	[Parameter(Mandatory = $false, Position = 4)]
+	[ValidateNotNullorEmpty()]
+	[int] $MessageTimeToLiveSec
+	, 
+	# [Optional] The Facility such as 'MyQueue'. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 5)]
+	[ValidateNotNullorEmpty()]
+	[alias("queue")]
+	[alias("topic")]
+	[alias("QueueName")]
+	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultSendFacility
+	, 
+	# [Optional] The Format such as 'JSON'. If you do not specify this 
+	# value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 6)]
+	[ValidateNotNullorEmpty()]
+	[string] $MessageFormat = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Format
+	, 
+	# [Optional] MessageClient
+	[Parameter(Mandatory = $false, Position = 7)]
 	$MessageClient
 )
 
@@ -62,7 +206,7 @@ BEGIN
 {
 	$datBegin = [datetime]::Now;
 	[string] $fn = $MyInvocation.MyCommand.Name;
-	Log-Debug $fn ("CALL. QueueName '{0}'" -f $QueueName ) -fac 1;
+	Log-Debug $fn ("CALL. Facility '{0}'" -f $Facility ) -fac 1;
 
 }
 # BEGIN 
@@ -82,7 +226,7 @@ try
 	{
 		if ( !$PSBoundParameters.ContainsKey('MessageClient') ) 
 		{
-			$MessageClient = New-MessageSender -QueueName $QueueName;
+			$MessageClient = New-MessageSender -Facility $Facility;
 		}
 	} 
 	catch 
@@ -104,8 +248,7 @@ try
 		# Default { $MessageBody = $Message; }
 	# }
 	
-	Log-Debug $fn ("-> MessageBody '{0}'; Type '{1}'" -f $MessageBody.toString(), $MessageBody.GetType() );
-	Log-Debug $fn ("-> As '{0}'; Type '{1}'" -f $MessageFormat.toString(), $MessageFormat.GetType() );
+	Log-Debug $fn ("-> MessageBody '{0}'; Type '{1}'; As '{2}'; AsType '{3}'" -f $MessageBody.toString(), $MessageBody.GetType(), $MessageFormat.toString(), $MessageFormat.GetType() );
 		
 	# Create Message
 	[Microsoft.ServiceBus.Messaging.BrokeredMessage] $BrokeredMessage = [Microsoft.ServiceBus.Messaging.BrokeredMessage]($MessageBody.ToString());
@@ -117,6 +260,10 @@ try
 		{
 			$BrokeredMessage.Properties[$MessageProperty.Name] = $MessageProperty.Value.ToString();
 		}
+	}
+	if ( $PSBoundParameters.ContainsKey('MessageId') ) 
+	{
+		$BrokeredMessage.MessageId = $MessageId;
 	}
 	if ( $PSBoundParameters.ContainsKey('MessageLabel') ) 
 	{
@@ -200,8 +347,6 @@ END
 # END
 
 } # function
-
-if($MyInvocation.ScriptName) { Export-ModuleMember -Function New-Message; } 
 
 # 
 # Copyright 2014-2015 d-fens GmbH

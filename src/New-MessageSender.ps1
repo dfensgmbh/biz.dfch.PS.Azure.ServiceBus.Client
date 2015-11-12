@@ -36,11 +36,14 @@ Param
 	[ValidateNotNullorEmpty()]
 	$MessageFactory = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageFactory
 	, 
-	# [Optional] The QueueName such as 'MyQueue'. If you do not specify this 
+	# [Optional] The Facility such as 'MyQueue'. If you do not specify this 
 	# value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 1)]
 	[ValidateNotNullorEmpty()]
-	[string] $QueueName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultQueueName
+	[alias("queue")]
+	[alias("topic")]
+	[alias("QueueName")]
+	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultSendFacility
 	, 
 	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
 	# which to perform login. Default is credential as specified in the module 
@@ -54,7 +57,7 @@ BEGIN
 {
 	$datBegin = [datetime]::Now;
 	[string] $fn = $MyInvocation.MyCommand.Name;
-	Log-Debug $fn ("CALL. MessageFactory Endpoint '{0}'; QueueName '{1}'; Username '{2}'" -f $MessageFactory.Address.AbsolutePath, $QueueName, $Credential.Username ) -fac 1;
+	Log-Debug $fn ("CALL. MessageFactory Endpoint '{0}'; Facility '{1}'; Username '{2}'" -f $MessageFactory.Address.AbsolutePath, $Facility, $Credential.Username ) -fac 1;
 	
 	# Check MessageFactory connection
 	if ( $MessageFactory -isnot [Microsoft.ServiceBus.Messaging.MessagingFactory] ) 
@@ -67,7 +70,7 @@ BEGIN
 	# Check MessageFactory status
 	if ( $MessageFactory.IsClosed ) 
 	{
-		Log-Info $fn ("MessageFactory Endpoint '{0}' is closed -> reconnect" -f $MessageFactory.Address.AbsolutePath, $QueueName, $Credential.Username ) -fac 1;
+		Log-Info $fn ("MessageFactory Endpoint '{0}' is closed -> reconnect" -f $MessageFactory.Address.AbsolutePath, $Facility, $Credential.Username ) -fac 1;
 		[Microsoft.ServiceBus.Messaging.MessagingFactory] $MessageFactory = Enter-ServiceBus -EndpointServerName $MessageFactory.Address.Host -RuntimePort $MessageFactory.Address.Port -Namespace $MessageFactory.Address.Segments[-1];
 	}
 }
@@ -88,7 +91,7 @@ try
 	# Get MessageClient from global
 	if ( (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient -is [Microsoft.ServiceBus.Messaging.MessageSender] ) 
 	{
-		if ( !(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient.IsClosed -and (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient.Path -eq $QueueName  ) 
+		if ( !(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient.IsClosed -and (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient.Path -eq $Facility  ) 
 		{
 			[Microsoft.ServiceBus.Messaging.MessageSender] $MessageSenderClient = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient;
 		}
@@ -97,7 +100,7 @@ try
 	# Create MessageClient
 	if ( $MessageSenderClient -eq $null ) 
 	{
-		[Microsoft.ServiceBus.Messaging.MessageSender] $MessageSenderClient = $MessageFactory.CreateMessageSender($QueueName);	
+		[Microsoft.ServiceBus.Messaging.MessageSender] $MessageSenderClient = $MessageFactory.CreateMessageSender($Facility);	
 	}
 	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient = $MessageSenderClient;
 	
