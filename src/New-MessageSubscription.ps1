@@ -1,111 +1,188 @@
-function New-MessageSender {
+﻿function New-MessageSubscription {
 <#
-.SYNOPSIS
-Creates a message sender to the Service Bus Message Factory.
+    .SYNOPSIS
+    This script can be used to delete a subscription from a topic.
+            
+    .DESCRIPTION
+    This script can be used to delete a subscription from a topic.
 
+    .PARAMETER  TopicPath
+    Specifies the path of the topic that this subscription description belongs to.
+    
+    .PARAMETER  Name
+    Specifies the name of the subscription.
 
-.DESCRIPTION
-Creates a message sender to the Service Bus Message Factory.
-
-
-.OUTPUTS
-This Cmdlet returns a SbmpMessageSender object with references to the MessageFactory of the application. On failure it returns $null.
-
-
-.INPUTS
-See PARAMETER section for a description of input parameters.
-
-
-.EXAMPLE
-$sender = New-MessageSender;
-$sender
-
-Creates a message sender to the Service Bus Message Factory with default credentials (current user) and against server defined within module configuration xml file.
-
+    .PARAMETER  Force
+    Force remove, ignore message count
 	
+    .PARAMETER  Namespace
+    Specifies the name of the Service Bus namespace.
+
 #>
-[CmdletBinding(
-	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
-)]
-[OutputType([Microsoft.ServiceBus.Messaging.MessageSender])]
-Param 
-(
-	# [Optional] The MessageFactory. If you do not 
+[CmdletBinding(PositionalBinding=$True)]
+Param(
+	# [Optional] The EndpointServerName such as 'localhost'. If you do not 
 	# specify this value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 0)]
 	[ValidateNotNullorEmpty()]
-	[alias("MessageFactory")]
-	$Factory = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory
+	[string] $EndpointServerName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).EndpointServerName
 	, 
-	# [Optional] The Facility such as 'MyQueue'. If you do not specify this 
+	# [Optional] The RuntimePort such as '123'. If you do not specify this 
 	# value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 1)]
-	[ValidateNotNullorEmpty()]
-	[alias("queue")]
-	[alias("topic")]
-	[alias("QueueName")]
-	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SendFacility
+	[int] $RuntimePort = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).RuntimePort
 	, 
-	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
-	# which to perform login. Default is credential as specified in the module 
-	# configuration file.
+	# [Optional] The SharedAccessKeyName. If you do not specify this 
+	# value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 2)]
-	[alias("cred")]
-	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
-)
-
+	[string] $SharedAccessKeyName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKeyName	
+	,
+	# [Optional] The SharedAccessKey. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 3)]
+	[string] $SharedAccessKey = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKey	
+	,
+	# [Optional] The Namespace such as 'ServiceBusDefaultNamespace'. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 4)]
+	[string] $Namespace = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).NameSpace
+	,
+	# [Optional] The TransportType such as 'Amqp'. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 5)]
+	[ValidateSet('Amqp', 'NetMessaging')]
+	[string] $TransportType = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).TransportType
+	, 
+	# [Optional] The RuntimePort such as '123'. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 6)]
+	[int] $ManagementPort = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).ManagementPort
+	, 
+	# [Required] TopicPath
+    [Parameter(Mandatory = $true)]
+    [String] $TopicPath
+	,
+	# [Required] Subscription name
+    [Parameter(Mandatory = $true)]
+    [String] $Name
+	,
+	# AutoDeleteOnIdle
+	[Parameter(Mandatory = $false)]
+	[int] $AutoDeleteOnIdle = 10
+	,
+	# DefaultMessageTimeToLive
+	[Parameter(Mandatory = $false)]
+	[int] $DefaultMessageTimeToLive = 10
+	,
+	# [Optional] 
+	[Parameter(Mandatory = $false)]
+	[switch] $Force = $false
+    )
+	
 BEGIN 
 {
 	$datBegin = [datetime]::Now;
 	[string] $fn = $MyInvocation.MyCommand.Name;
-	Log-Debug $fn ("CALL. MessageFactory Endpoint '{0}'; Facility '{1}'; Username '{2}'" -f $Factory.Address.AbsolutePath, $Facility, $Credential.Username ) -fac 1;
+	Log-Debug $fn ("CALL. EndpointServerName '{0}'; RuntimePort '{1}'; Namespace '{2}'; TopicPath '{3}'; Subscription '{4}'" -f $EndpointServerName, $RuntimePort, $Namespace, $TopicPath, $Name) -fac 1;
 	
-	# Check MessageFactory connection
-	if ( $Factory -isnot [Microsoft.ServiceBus.Messaging.MessagingFactory] ) 
-	{
-		$msg = "MessageFactory: Parameter validation FAILED. Connect to the message factory before using the Cmdlet.";
-		$e = New-CustomErrorRecord -m $msg -cat InvalidArgument -o $Factory;
-		$PSCmdlet.ThrowTerminatingError($e);
-	}
-	
-	# Check MessageFactory status
-	if ( $Factory.IsClosed ) 
-	{
-		Log-Info $fn ("MessageFactory Endpoint '{0}' is closed -> reconnect" -f $Factory.Address.AbsolutePath, $Facility, $Credential.Username ) -fac 1;
-		[Microsoft.ServiceBus.Messaging.MessagingFactory] $Factory = Enter-ServiceBus -EndpointServerName $Factory.Address.Host -RuntimePort $Factory.Address.Port -Namespace $Factory.Address.Segments[-1];
-	}
+	$PSDefaultParameterValues.'Log-Debug:fn' = $fn;
+	$PSDefaultParameterValues.'Log-Info:fn' = $fn;
+	$PSDefaultParameterValues.'Log-Error:fn' = $fn;
+
 }
-# BEGIN 
+# BEGIN
 
 PROCESS 
 {
 
-[boolean] $fReturn = $false;
+# Default test variable for checking function response codes.
+[Boolean] $fReturn = $false;
+# Return values are always and only returned via OutputParameter.
+$OutputParameter = $null;
 
 try 
 {
 	# Parameter validation
-	# N/A
-	
-	# Get message client
-	[Microsoft.ServiceBus.Messaging.MessageSender] $Client = $null;
-	# Get message client from global
-	if ( (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client -is [Microsoft.ServiceBus.Messaging.MessageSender] ) 
+	if(!$PSCmdlet.ShouldProcess(($PSBoundParameters | Out-String)))
 	{
-		if ( !(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client.IsClosed -and (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client.Path -eq $Facility  ) 
+		throw($gotoSuccess);
+	}
+	
+	# Set the output level to verbose and make the script stop on error
+	$VerbosePreference = "Continue";
+	$ErrorActionPreference = "Stop";
+
+	# Prepare connection string	
+	$ConnectionString = 'Endpoint=sb://{0}/{1};RuntimePort={2};ManagementPort={6};SharedAccessKeyName={3};SharedAccessKey={4};TransportType={5}' -f $EndpointServerName, $Namespace, $RuntimePort, $SharedAccessKeyName, $SharedAccessKey, $TransportType, $ManagementPort;
+
+	# Create the NamespaceManager object to create the subscription	
+	$NamespaceManager = [Microsoft.ServiceBus.NamespaceManager]::CreateFromConnectionString($ConnectionString);
+	Log-Debug -fac 0 -msg "NamespaceManager object for the [$Namespace] namespace has been successfully created.";
+
+	# Check if the topic exists
+	try
+	{
+		if (!$NamespaceManager.TopicExists($TopicPath))
 		{
-			[Microsoft.ServiceBus.Messaging.MessageSender] $Client = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client;
+			$msg = "NamespaceManager: The [$TopicPath] topic does not exit in the [$Namespace] namespace.";
+			Log-Error -msg $msg;
+			$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $NamespaceManager;
+			$PSCmdlet.ThrowTerminatingError($e);
 		}
 	}
-
-	# Create message client
-	if ( $Client -eq $null ) 
+	catch
 	{
-		[Microsoft.ServiceBus.Messaging.MessageSender] $Client = $Factory.CreateMessageSender($Facility);	
+		$msg = $_.Exception.Message;
+		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $NamespaceManager;
+		Log-Error -msg $msg;
+		$PSCmdlet.ThrowTerminatingError($e);
 	}
-	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client = $Client;
-	
-	$OutputParameter = $Client;
+
+	# Check if the subscription exists
+	if ($NamespaceManager.SubscriptionExists($TopicPath, $Name))
+	{
+		$OutputParameter = $NamespaceManager.GetSubscription($TopicPath, $Name);
+	}
+	else
+	{
+		$SubscriptionDescription = New-Object -TypeName Microsoft.ServiceBus.Messaging.SubscriptionDescription -ArgumentList $TopicPath, $Name;
+		$SubscriptionDescription.AutoDeleteOnIdle = [System.TimeSpan]::FromMinutes($AutoDeleteOnIdle);
+		$SubscriptionDescription.DefaultMessageTimeToLive = [System.TimeSpan]::FromMinutes($DefaultMessageTimeToLive);
+		$OutputParameter = $NamespaceManager.CreateSubscription($SubscriptionDescription);
+		<#
+		if ($AutoDeleteOnIdle -ge 5)
+		{
+			$SubscriptionDescription.AutoDeleteOnIdle = [System.TimeSpan]::FromMinutes(10);
+		}
+		if ($DefaultMessageTimeToLive -gt 0)
+		{
+			$SubscriptionDescription.DefaultMessageTimeToLive = [System.TimeSpan]::FromMinutes($DefaultMessageTimeToLive);
+		}
+		$SubscriptionDescription.EnableBatchedOperations = $EnableBatchedOperations;
+		$SubscriptionDescription.EnableDeadLetteringOnFilterEvaluationExceptions = $EnableDeadLetteringOnFilterEvaluationExceptions;
+		$SubscriptionDescription.EnableDeadLetteringOnMessageExpiration = $EnableDeadLetteringOnMessageExpiration;
+		$SubscriptionDescription.ForwardTo = $ForwardTo;
+		if ($LockDuration -gt 0)
+		{
+			$SubscriptionDescription.LockDuration = [System.TimeSpan]::FromSeconds($LockDuration);
+		}
+		$SubscriptionDescription.MaxDeliveryCount = $MaxDeliveryCount;
+		$SubscriptionDescription.RequiresSession = $RequiresSession;
+		$SubscriptionDescription.UserMetadata = $UserMetadata;
+		
+		if ( $SqlRuleAction ) {
+			$SqlFilterObject = New-Object -TypeName Microsoft.ServiceBus.Messaging.SqlFilter -ArgumentList $SqlFilter;
+			$SqlRuleActionObject = New-Object -TypeName Microsoft.ServiceBus.Messaging.SqlRuleAction -ArgumentList $SqlRuleAction;
+			$RuleDescription = New-Object -TypeName Microsoft.ServiceBus.Messaging.RuleDescription;
+			$RuleDescription.Filter = $SqlFilterObject;
+			$RuleDescription.Action = $SqlRuleActionObject;
+			$OutputParameter = $NamespaceManager.CreateSubscription($SubscriptionDescription, $RuleDescription);
+		} else {
+			$OutputParameter = $NamespaceManager.CreateSubscription($SubscriptionDescription);
+		}
+		#>
+		Log-Info -msg "The [$Name] subscription for the [$TopicPath] topic has been successfully created.";
+	}
 	$fReturn = $true;
 
 }
@@ -113,7 +190,7 @@ catch
 {
 	if($gotoSuccess -eq $_.Exception.Message) 
 	{
-			$fReturn = $true;
+		$fReturn = $true;
 	} 
 	else 
 	{
@@ -124,7 +201,7 @@ catch
 		
 		if($_.Exception -is [System.Net.WebException]) 
 		{
-			Log-Critical $fn "Login to Uri '$Uri' with Username '$Username' FAILED [$_].";
+			Log-Critical $fn ("[WebException] Request FAILED with Status '{0}'. [{1}]." -f $_.Status, $_);
 			Log-Debug $fn $ErrorText -fac 3;
 		}
 		else 
@@ -153,21 +230,25 @@ finally
 	# Clean up
 	# N/A
 }
-return $OutputParameter;
 
 }
 # PROCESS
 
 END 
 {
-	$datEnd = [datetime]::Now;
-	Log-Debug -fn $fn -msg ("RET. fReturn: [{0}]. Execution time: [{1}]ms. Started: [{2}]." -f $fReturn, ($datEnd - $datBegin).TotalMilliseconds, $datBegin.ToString('yyyy-MM-dd HH:mm:ss.fffzzz')) -fac 2;
+
+$datEnd = [datetime]::Now;
+Log-Debug -fn $fn -msg ("RET. fReturn: [{0}]. Execution time: [{1}]ms. Started: [{2}]." -f $fReturn, ($datEnd - $datBegin).TotalMilliseconds, $datBegin.ToString('yyyy-MM-dd HH:mm:ss.fffzzz')) -fac 2;
+
+# Return values are always and only returned via OutputParameter.
+return $OutputParameter;
+
 }
 # END
 
 } # function
 
-if($MyInvocation.ScriptName) { Export-ModuleMember -Function New-MessageSender; } 
+if($MyInvocation.ScriptName) { Export-ModuleMember -function New-MessageSubscription; }
 
 # 
 # Copyright 2014-2015 d-fens GmbH
@@ -188,8 +269,8 @@ if($MyInvocation.ScriptName) { Export-ModuleMember -Function New-MessageSender; 
 # SIG # Begin signature block
 # MIIXDwYJKoZIhvcNAQcCoIIXADCCFvwCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUMWOUDAIgtGaMCG0XMqY/RL3R
-# zEKgghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUyQ9oPmAPCR9gIN7/6mzDIklU
+# YUCgghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
 # VzELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNV
 # BAsTB1Jvb3QgQ0ExGzAZBgNVBAMTEkdsb2JhbFNpZ24gUm9vdCBDQTAeFw0xMTA0
 # MTMxMDAwMDBaFw0yODAxMjgxMjAwMDBaMFIxCzAJBgNVBAYTAkJFMRkwFwYDVQQK
@@ -288,26 +369,26 @@ if($MyInvocation.ScriptName) { Export-ModuleMember -Function New-MessageSender; 
 # MDAuBgNVBAMTJ0dsb2JhbFNpZ24gQ29kZVNpZ25pbmcgQ0EgLSBTSEEyNTYgLSBH
 # MgISESENFrJbjBGW0/5XyYYR5rrZMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEM
 # MQowCKACgAChAoAAMBkGCSqGSIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQB
-# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBQRSnD9dCW8dJFi
-# fiMmYKwILlxSVjANBgkqhkiG9w0BAQEFAASCAQBAlXRaheU/7HKLYPKXawcBET2Z
-# P7piAIbz75OOOAW/7ZnShlUTPMLzMF8KHUY2TCLUj9mrs+PrzfVFadrl34xRGLtN
-# cAr+yIhyvVBlLiwUkeyQqlRz1tt+1+51YMn/8nOar01Ne+ys4itMknBRwlGVftBr
-# mptWGBH/NTw2T6As0YBrcTvP1KTHNmyrHzChvF4Q8jtnhTUcAACsTtG5VvE8PJlb
-# IYd/6PpF17/+ByhlFKsVYlyge1JlQqVzTGnkkhwIgNfA4XhcaqIDn7Z4CNqQ7s9U
-# UMAUD4VU/UfEbRgeRjlGVZ8qJZRO0J1vOL7vLj5cLV2LPhPweGFEt3DFZOKCoYIC
+# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBR4PNZIZnPCem5v
+# z4SKcu4+8+WFvDANBgkqhkiG9w0BAQEFAASCAQDHEr0aFKD/qRQPxpXfsudEJ3ZJ
+# lQMUt2m4Lsy6eC2wwfEv4CPU85Y1gdRZmPF9Wb92RJVkZYfNi2eNuM869RzaMwX+
+# jv9ecPXSfZSdHywRL5KTa2E6tUlFqBQaMxOGuX2TfjB04NpjZo3aq8+kxy90vHpu
+# aXe/YBhc2X8oXkEFhRXQjANFSchhXwXUrYfBK6SFxkDBuse+E3jCzZFUfmAMXPh7
+# E/CmKXRGsKkuoc2d38JHFE5/zcn/leS0Djd+8IN47idQLwTAfB+rIV9UTljDEqM4
+# avInr5TuMR95IKOQRBldYwsXSOLzDAWmtKKTdDzla3E6xO+l20r+aCegrVphoYIC
 # ojCCAp4GCSqGSIb3DQEJBjGCAo8wggKLAgEBMGgwUjELMAkGA1UEBhMCQkUxGTAX
 # BgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGlt
 # ZXN0YW1waW5nIENBIC0gRzICEhEhBqCB0z/YeuWCTMFrUglOAzAJBgUrDgMCGgUA
 # oIH9MBgGCSqGSIb3DQEJAzELBgkqhkiG9w0BBwEwHAYJKoZIhvcNAQkFMQ8XDTE1
-# MTEwNDE0MzkxOVowIwYJKoZIhvcNAQkEMRYEFDeUwlzVAT9sO+FTLlfrRJ5d+TdW
+# MTEwNDE0MzkxNFowIwYJKoZIhvcNAQkEMRYEFIYYEArbT1a8IKjveSsn7qZEQtmV
 # MIGdBgsqhkiG9w0BCRACDDGBjTCBijCBhzCBhAQUs2MItNTN7U/PvWa5Vfrjv7Es
 # KeYwbDBWpFQwUjELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYt
 # c2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGltZXN0YW1waW5nIENBIC0gRzICEhEh
-# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQCTViW7YCdsNldOvOyR
-# fyqw4wU3Tstz2VwQ7kwrSeIhRsW63dY58aEr8dHzmDbKFDzNVMohGt3CXxWyyIT5
-# T0bafFKCccJfDi+G2UBnl+lNzI+iDPo+Aa0DYLwSmwKfOkZdl1pLu2XB6DE0P4xr
-# 8Kr41/6PGEXZjkWCfBYRZ9IDt4xcAcR92MEstLX7KfXEiChI7j8KIHDSScayYaSI
-# i7dYkm8v6ESV/yEK6AsCUV3h5YeMvYbxMPrXs4F38EUJs9tofmMw1okH9vbfllq8
-# DcfP676usFEY5ZcnlMO1c+YsxaClM8Mff7DQ2Ske5u7iY1uSeIp+/l4i1WT8Dqe5
-# tIqb
+# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQAWcqDz/ye1cOSv+t6/
+# nIeypRVR1pBb0IZ2pnmqeVNvEcwymUcwQx5U6XZN/0aag1fjc1QGsJ9AKTn5z5xE
+# azkXEONgi4F88ubC2G29q2iNA0JEu+6AdCvcvOIdnv+1DQ8IE+1w2SKMHXjxU7QA
+# 20U91YER2y6BOiuXuSo1jTRsoxS5nyqeSUCtwgrkaIAbGZ4BjCJppFwvMByyaLjV
+# eaRagVSiLLvoXSQlWbckaWdmW13ws20OD0X919go2OeaH7m1YKVurBlqL/IVy35F
+# r426/+VK50mMGxYfXn7dzp4c0dT2Ptq2OjmrvqgiPP+oEb2aD7YVSZzALEUNWBuB
+# rBid
 # SIG # End signature block

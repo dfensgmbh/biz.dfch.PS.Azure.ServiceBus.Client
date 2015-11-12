@@ -1,21 +1,37 @@
 function Get-Message {
 <#
 .SYNOPSIS
-Creates a message for the Service Bus Message Factory.
+Receives a message from a receiver client, which is based on the Service Bus Messaging Factory.
 
 .DESCRIPTION
-Creates a message for the Service Bus Message Factory.
+Receives a message from a receiver client, which is based on the Service Bus Messaging Factory.
 
 .OUTPUTS
-This Cmdlet returns the SequenceNumber from the MessageFactory Message object. On failure it returns $null.
+This Cmdlet returns the Messaging Factory message object. In case of failure is trying '-Retry' times, otherwise returns $null.
 
 .INPUTS
 See PARAMETER section for a description of input parameters.
 
 .EXAMPLE
-$message = Get-Message;
+$message = Get-Message -BodyAsProperty;
+write-host $message.Properties['Body']
 
-Creates a message for the Service Bus Message Factory and against server defined within module configuration xml file.
+.EXAMPLE
+$message = Get-Message -ReceiveAndDelete;
+
+.EXAMPLE
+$message = Get-Message -Receivemode 'PeekLock';
+...do something
+$message.Complete();
+
+.EXAMPLE
+$message = Get-Message -Facility 'Topic-Newsletter' -EnsureFacility;
+
+.EXAMPLE
+$receiver = Get-MessageReceiver -Facility 'MyQueue1';
+$message = Get-Message -Client $receiver;
+
+Receives a message from a receiver client, which is based on the Service Bus Messaging Factory against server defined within module configuration xml file.
 #>
 [CmdletBinding(
 	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
@@ -64,26 +80,37 @@ Param
 	[alias("QueueName")]
 	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).ReceiveFacility
 	, 
-	# [Optional] Messaging Client (instance of the MessagingFactory)
+	# [Optional] Checks if facility existing
 	[Parameter(Mandatory = $false, Position = 7)]
+	[alias("ensure")]
+	[alias("broadcast")]
+	[alias("checkfacility")]
+	[switch]$EnsureFacility = $false
+	,
+	# [Optional] Messaging Client (instance of the MessagingFactory)
+	[Parameter(Mandatory = $false, Position = 8)]
 	[alias("MessageClient")]
 	$Client
 	,
 	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
 	# which to perform login. Default is credential as specified in the module 
 	# configuration file.
-	[Parameter(Mandatory = $false, Position = 8)]
+	[Parameter(Mandatory = $false, Position = 9)]
 	[alias("cred")]
 	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
 	,
+	# [Optional] Skip retrying
+	[Parameter(Mandatory = $false, Position = 10)]
+	[switch]$NoRetry = $false
+	,
 	# [Optional] The Retry. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory=$false, Position = 9)]
+	[Parameter(Mandatory=$false, Position = 11)]
 	[int]$Retry = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandRetry
 	,
 	# [Optional] The RetryInterval. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory=$false, Position = 10)]
+	[Parameter(Mandatory=$false, Position = 12)]
 	[int]$RetryInterval = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandRetryInterval
 )
 
@@ -109,7 +136,7 @@ PROCESS
 		$var = Get-Variable -Name $key -ErrorAction SilentlyContinue;
 		if($var)
 		{
-			if ( @('Retry', 'RetryInterval') -notcontains $($var.name) -and $var.value -ne $null -and $($var.value) -ne '' )  
+			if ( @('Retry', 'RetryInterval', 'NoRetry') -notcontains $($var.name) -and $var.value -ne $null -and $($var.value) -ne '' )  
 			{
 				$Params.Add($($var.name), $var.value);
 			}
@@ -128,9 +155,19 @@ PROCESS
 		catch
 		{
 			# Throw last execption
-			if ( $c -gt $Retry -or $_.Exception.Message -match 'Connect to the message factory before using the Cmdlet.' )
+			if ( $NoRetry -or 
+				$c -gt $Retry -or 
+				$_.Exception.Message -match 'Connect to the message factory before using the Cmdlet.' 
+				)
 			{
-				throw;
+				if ($PSCmdlet.MyInvocation.BoundParameters["Debug"].IsPresent) 
+				{
+					throw;
+				}
+				else
+				{
+					break;
+				}	
 			}
 			Log-Debug $fn ("[{0}/{1}] Retrying operation [{2}]" -f $c, $Retry, ($fn -replace 'Worker', ''));
 			Start-Sleep -Seconds $RetryInterval;
@@ -157,13 +194,13 @@ if($MyInvocation.ScriptName) { Export-ModuleMember -Function Get-Message; }
 function Get-MessageWorker {
 <#
 .SYNOPSIS
-Creates a message for the Service Bus Message Factory.
+Receives a message from a receiver client, which is based on the Service Bus Messaging Factory.
 
 .DESCRIPTION
-Creates a message for the Service Bus Message Factory.
+Receives a message from a receiver client, which is based on the Service Bus Messaging Factory.
 
 .OUTPUTS
-This Cmdlet returns the SequenceNumber from the MessageFactory Message object. On failure it returns $null.
+This Cmdlet returns the MessageId from the Messaging Factory message object. On failure it returns $null.
 
 .INPUTS
 See PARAMETER section for a description of input parameters.
@@ -171,7 +208,7 @@ See PARAMETER section for a description of input parameters.
 .EXAMPLE
 $message = Get-MessageWorker;
 
-Creates a message for the Service Bus Message Factory and against server defined within module configuration xml file.
+Receives a message from a receiver client, which is based on the Service Bus Messaging Factory.
 #>
 [CmdletBinding(
 	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
@@ -220,15 +257,22 @@ Param
 	[alias("QueueName")]
 	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).ReceiveFacility
 	, 
-	# [Optional] Messaging Client (instance of the MessagingFactory)
+	# [Optional] Checks if facility existing
 	[Parameter(Mandatory = $false, Position = 7)]
+	[alias("ensure")]
+	[alias("broadcast")]
+	[alias("checkfacility")]
+	[switch]$EnsureFacility = $false
+	,
+	# [Optional] Messaging Client (instance of the MessagingFactory)
+	[Parameter(Mandatory = $false, Position = 8)]
 	[alias("MessageClient")]
 	$Client
 	,
 	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
 	# which to perform login. Default is credential as specified in the module 
 	# configuration file.
-	[Parameter(Mandatory = $false, Position = 8)]
+	[Parameter(Mandatory = $false, Position = 9)]
 	[alias("cred")]
 	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
 )
@@ -255,12 +299,33 @@ try
 		$Receivemode = 'ReceiveAndDelete';
 	}
 	
+	# Check facility
+	if ( $EnsureFacility ) 
+	{
+		$TopicPath = ($Facility -Split "\\Subscriptions\\")[0];
+		$SubscriptionName = "RECV-{0}" -f (get-wmiobject Win32_ComputerSystemProduct  | Select-Object -ExpandProperty UUID).toString();
+		if ( $Facility -match "\\Subscriptions\\" )
+		{
+			$SubscriptionName = ($Facility -Split "\\Subscriptions\\")[1];
+		}
+		try 
+		{
+			$FacilitiyExists = New-MessageSubscription -TopicPath $TopicPath -Name $SubscriptionName;
+			$Facility = '{0}\Subscriptions\{1}' -f $TopicPath, $SubscriptionName;
+		} catch {
+			$msg = $_.Exception.Message;
+			Log-Error -msg $msg;
+			$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $Facility;
+			$PSCmdlet.ThrowTerminatingError($e);
+		}
+	}
+	
 	# Create Client
 	if ( !$PSBoundParameters.ContainsKey('Client') ) 
 	{
 		try 
 		{
-			$Client = New-MessageReceiver -Facility $Facility -Receivemode $Receivemode;
+			$Client = Get-MessageReceiver -Facility $Facility -Receivemode $Receivemode;
 		} 
 		catch 
 		{

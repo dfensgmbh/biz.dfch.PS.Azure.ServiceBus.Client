@@ -1,15 +1,15 @@
-function New-MessageReceiver {
+function Get-MessageSender {
 <#
 .SYNOPSIS
-Creates a message receiver to the Service Bus Message Factory.
+Get a message sender to the Service Bus Message Factory.
 
 
 .DESCRIPTION
-Creates a message receiver to the Service Bus Message Factory.
+Get a message sender to the Service Bus Message Factory.
 
 
 .OUTPUTS
-This Cmdlet returns a SbmpMessageReceiver object with references to the MessageFactory of the application. On failure it returns $null.
+This Cmdlet returns a SbmpMessageSender object with references to the MessageFactory of the application. On failure it returns $null.
 
 
 .INPUTS
@@ -17,20 +17,22 @@ See PARAMETER section for a description of input parameters.
 
 
 .EXAMPLE
-$receiver = New-MessageReceiver;
-$receiver
+$sender1 = Get-MessageSender -Facility 'MyQueue1';
+$sender2 = Get-MessageSender -Facility 'MyQueue2';
+New-Message 'TEST' -Client $sender1;
+New-Message 'TEST' -Client $sender2;
 
-Creates a message receiver to the Service Bus Message Factory with default credentials (current user) and against server defined within module configuration xml file.
+Get a message sender to the Service Bus Message Factory with default credentials (current user) and against server defined within module configuration xml file.
 
-
+	
 #>
 [CmdletBinding(
 	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
 )]
-[OutputType([Microsoft.ServiceBus.Messaging.MessageReceiver])]
+[OutputType([Microsoft.ServiceBus.Messaging.MessageSender])]
 Param 
 (
-	# [Optional] The Message Factory. If you do not 
+	# [Optional] The MessageFactory. If you do not 
 	# specify this value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 0)]
 	[ValidateNotNullorEmpty()]
@@ -42,39 +44,26 @@ Param
 	[Parameter(Mandatory = $false, Position = 1)]
 	[ValidateNotNullorEmpty()]
 	[alias("queue")]
-	[alias("subscription")]
+	[alias("topic")]
 	[alias("QueueName")]
-	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).ReceiveFacility
-	, 
-	# [Optional] The Receivemode such as 'PeekLock'. If you do not specify this 
-	# value it is taken from the default parameter.
-	[Parameter(Mandatory = $false, Position = 2)]
-	[ValidateSet('PeekLock', 'ReceiveAndDelete')]
-	[string] $Receivemode = 'ReceiveAndDelete'
-	, 
-	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
-	# which to perform login. Default is credential as specified in the module 
-	# configuration file.
-	[Parameter(Mandatory = $false, Position = 3)]
-	[alias("cred")]
-	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
+	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SendFacility
 )
 
 BEGIN 
 {
 	$datBegin = [datetime]::Now;
 	[string] $fn = $MyInvocation.MyCommand.Name;
-	Log-Debug $fn ("CALL. MessageFactory Endpoint '{0}'; Facility '{1}'; Username '{2}'" -f $Factory.Address.AbsolutePath, $Facility, $Credential.Username ) -fac 1;
+	Log-Debug $fn ("CALL. MessageFactory Endpoint '{0}'; Facility '{1}'" -f $Factory.Address.AbsolutePath, $Facility ) -fac 1;
 	
-	# Check message factory connection
+	# Check MessageFactory connection
 	if ( $Factory -isnot [Microsoft.ServiceBus.Messaging.MessagingFactory] ) 
 	{
-		$msg = "Factory: Parameter validation FAILED. Connect to the message factory before using the Cmdlet.";
-		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $Factory;
+		$msg = "MessageFactory: Parameter validation FAILED. Connect to the message factory before using the Cmdlet.";
+		$e = New-CustomErrorRecord -m $msg -cat InvalidArgument -o $Factory;
 		$PSCmdlet.ThrowTerminatingError($e);
 	}
 	
-	# Check message factory status
+	# Check MessageFactory status
 	if ( $Factory.IsClosed ) 
 	{
 		Log-Info $fn ("MessageFactory Endpoint '{0}' is closed -> reconnect" -f $Factory.Address.AbsolutePath, $Facility, $Credential.Username ) -fac 1;
@@ -92,22 +81,23 @@ try
 {
 	# Parameter validation
 	# N/A
-
+	
 	# Get message client
-	[Microsoft.ServiceBus.Messaging.MessageReceiver] $Client = $null;
+	[Microsoft.ServiceBus.Messaging.MessageSender] $Client = $null;
 	# Get message client from global
-	if ( (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client -is [Microsoft.ServiceBus.Messaging.MessageReceiver] ) 
+	if ( (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client -is [Microsoft.ServiceBus.Messaging.MessageSender] ) 
 	{
-		if ( !(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client.IsClosed -and (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client.Path -eq $Facility -and (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client.Mode -eq $Receivemode ) 
+		if ( !(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client.IsClosed -and 
+		(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client.Path -eq $Facility  ) 
 		{
-			[Microsoft.ServiceBus.Messaging.MessageReceiver] $Client = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client;
+			[Microsoft.ServiceBus.Messaging.MessageSender] $Client = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client;
 		}
 	}
 
 	# Create message client
 	if ( $Client -eq $null ) 
 	{
-		[Microsoft.ServiceBus.Messaging.MessageReceiver] $Client = $Factory.CreateMessageReceiver($Facility, [Microsoft.ServiceBus.Messaging.ReceiveMode]::$ReceiveMode);
+		[Microsoft.ServiceBus.Messaging.MessageSender] $Client = $Factory.CreateMessageSender($Facility);	
 	}
 	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client = $Client;
 	
@@ -173,7 +163,7 @@ END
 
 } # function
 
-if($MyInvocation.ScriptName) { Export-ModuleMember -Function New-MessageReceiver; } 
+if($MyInvocation.ScriptName) { Export-ModuleMember -Function Get-MessageSender; } 
 
 # 
 # Copyright 2014-2015 d-fens GmbH
@@ -194,8 +184,8 @@ if($MyInvocation.ScriptName) { Export-ModuleMember -Function New-MessageReceiver
 # SIG # Begin signature block
 # MIIXDwYJKoZIhvcNAQcCoIIXADCCFvwCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUZxocnkpjdpCoqeAvwrllW/kV
-# spegghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUMWOUDAIgtGaMCG0XMqY/RL3R
+# zEKgghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
 # VzELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNV
 # BAsTB1Jvb3QgQ0ExGzAZBgNVBAMTEkdsb2JhbFNpZ24gUm9vdCBDQTAeFw0xMTA0
 # MTMxMDAwMDBaFw0yODAxMjgxMjAwMDBaMFIxCzAJBgNVBAYTAkJFMRkwFwYDVQQK
@@ -294,26 +284,26 @@ if($MyInvocation.ScriptName) { Export-ModuleMember -Function New-MessageReceiver
 # MDAuBgNVBAMTJ0dsb2JhbFNpZ24gQ29kZVNpZ25pbmcgQ0EgLSBTSEEyNTYgLSBH
 # MgISESENFrJbjBGW0/5XyYYR5rrZMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEM
 # MQowCKACgAChAoAAMBkGCSqGSIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQB
-# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBQN0znRp3C15uef
-# uHZ3jMQ4IZTzTzANBgkqhkiG9w0BAQEFAASCAQBRJq3d4D7m/kTCmMFsamp6zSlj
-# Z82XDF2JvBFBTfcKyyzDPt46vdJLrtIUag79tx9PEXJDXwdM4N2iPKFSo9nvRZdA
-# e0sgaNGXrYxjdB2lO5HTVloGvBnldTvAXWK+szI2wO2GmJWS4n2LqiyU4I8L9aH0
-# 2bjC/sGekjoLZJ3gwEFJTmfPzQgUI56chFzSg/kksJKGzjW7wJ5Pr7fINLgyWRZU
-# JswI8IitUnOXVC0Bc8nqUpFkfXlRubLKcDiMJ9dlP4/IekMbnIV7SVhusX1U8rqR
-# LfhbNOtzoNHrZ9rDJSQMQv9TzpqcoJK3IBPz5gT/LgY+8+6k/10B26R111GboYIC
+# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBQRSnD9dCW8dJFi
+# fiMmYKwILlxSVjANBgkqhkiG9w0BAQEFAASCAQBAlXRaheU/7HKLYPKXawcBET2Z
+# P7piAIbz75OOOAW/7ZnShlUTPMLzMF8KHUY2TCLUj9mrs+PrzfVFadrl34xRGLtN
+# cAr+yIhyvVBlLiwUkeyQqlRz1tt+1+51YMn/8nOar01Ne+ys4itMknBRwlGVftBr
+# mptWGBH/NTw2T6As0YBrcTvP1KTHNmyrHzChvF4Q8jtnhTUcAACsTtG5VvE8PJlb
+# IYd/6PpF17/+ByhlFKsVYlyge1JlQqVzTGnkkhwIgNfA4XhcaqIDn7Z4CNqQ7s9U
+# UMAUD4VU/UfEbRgeRjlGVZ8qJZRO0J1vOL7vLj5cLV2LPhPweGFEt3DFZOKCoYIC
 # ojCCAp4GCSqGSIb3DQEJBjGCAo8wggKLAgEBMGgwUjELMAkGA1UEBhMCQkUxGTAX
 # BgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGlt
 # ZXN0YW1waW5nIENBIC0gRzICEhEhBqCB0z/YeuWCTMFrUglOAzAJBgUrDgMCGgUA
 # oIH9MBgGCSqGSIb3DQEJAzELBgkqhkiG9w0BBwEwHAYJKoZIhvcNAQkFMQ8XDTE1
-# MTEwNDE0MzkxOVowIwYJKoZIhvcNAQkEMRYEFGmeGd9O6xHKF8Xv38mnQCRvIB83
+# MTEwNDE0MzkxOVowIwYJKoZIhvcNAQkEMRYEFDeUwlzVAT9sO+FTLlfrRJ5d+TdW
 # MIGdBgsqhkiG9w0BCRACDDGBjTCBijCBhzCBhAQUs2MItNTN7U/PvWa5Vfrjv7Es
 # KeYwbDBWpFQwUjELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYt
 # c2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGltZXN0YW1waW5nIENBIC0gRzICEhEh
-# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQBfhcEycW5C3WqoV1V5
-# FDOeR5r5V5meYp6oqmESyVdpbGB6j5yxB7fcciHPQRgmayrbBDYAogoDozdFnl3r
-# KLOMKCIYLD9dFM28m92NPmZMVsdjleZ6Flo/CYGecn05aKdZzoux30xMNy9w70dA
-# 8/x6Qk6GkwvnO+ahp+Qptss1T+IoV7VMhCbh4sB19nv9MACF2qORruWTlyaS43fl
-# hxgEQTG2A1Z0TH0k0caY0rVimVgXndTzIdRXKG+KfGJRmcmOQAhd9UegsWpR99jS
-# E/7+/SU5B3q5JuTMeeHl/fiJOKyayJ6iZOJu8FQ5iDsAap5WgvrEqCZyMyxMJ4Aq
-# a9ZI
+# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQCTViW7YCdsNldOvOyR
+# fyqw4wU3Tstz2VwQ7kwrSeIhRsW63dY58aEr8dHzmDbKFDzNVMohGt3CXxWyyIT5
+# T0bafFKCccJfDi+G2UBnl+lNzI+iDPo+Aa0DYLwSmwKfOkZdl1pLu2XB6DE0P4xr
+# 8Kr41/6PGEXZjkWCfBYRZ9IDt4xcAcR92MEstLX7KfXEiChI7j8KIHDSScayYaSI
+# i7dYkm8v6ESV/yEK6AsCUV3h5YeMvYbxMPrXs4F38EUJs9tofmMw1okH9vbfllq8
+# DcfP676usFEY5ZcnlMO1c+YsxaClM8Mff7DQ2Ske5u7iY1uSeIp+/l4i1WT8Dqe5
+# tIqb
 # SIG # End signature block
