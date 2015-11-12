@@ -1,4 +1,6 @@
+
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
+$sut = (Split-Path -Leaf $MyInvocation.MyCommand.Path).Replace(".Tests.", ".")
 
 function Stop-Pester($message = "EMERGENCY: Script cannot continue.")
 {
@@ -11,20 +13,24 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 
 	Mock Export-ModuleMember { return $null; }
 	
+	. "$here\$sut"
+	
 	Context "SBClientBroadcast.Tests" {
 		BeforeEach {		
 			# Management module for service bus - required to create, check and delete queues/topis/subscriptions
 			$moduleName = 'biz.dfch.PS.Azure.ServiceBus.Setup';
 			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
-			Import-Module $moduleName;
+			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Setup -ErrorAction:SilentlyContinue;
+			Import-Module $moduleName -ErrorAction:SilentlyContinue;
 			
 			# Set Modulname
 			$moduleName = "biz.dfch.PS.Azure.ServiceBus.Client"
 			
 			# Remove Module if it is imported
+
 			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
-			# Import Modul from git repo
-			Import-Module "$here\..\src\$moduleName.psd1" -Force
+			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Client -ErrorAction:SilentlyContinue;
+			Import-Module "$here\..\src\$moduleName.psd1"  -ErrorAction:SilentlyContinue -Force;
 			
 			# Set variable to the loacal environment
 			$biz_dfch_PS_Azure_ServiceBus_Client.EndpointServerName = (Get-SBFarm).Hosts[0].Name;
@@ -63,16 +69,17 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			
 			# Arrange MessageReceiver (separate sessions)
 			$newJobs = New-Object System.Collections.ArrayList
-			$subscriptionsPath = New-Object System.Collections.ArrayList;
+			$subscriptionPaths = New-Object System.Collections.ArrayList;
 
 			for ($i=1; $i -le $amountOfReceiver; $i++){
 				# Arrange Subscriptions
-				$subscriptionsName = "PesterTestSub"+$i;
-				$subscriptionsPath.Add($topicName +"\Subscriptions\"+$subscriptionsName);
+				$subscriptionName = 'PesterTestSub{1}' -f $i;
+				$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
+				$subscriptionPaths.Add($subscriptionPath);
 				New-SBSubscription -TopicPath $topicName -Name $subscriptionsName -LockDuration 300;
 				
 				# Arrange Receive Sessions
-				$jobString = '{0} -Path "{1}" -WaitTimeoutSec {2} -Receivemode "{3}"' -f $pathMessageHelper, $subscriptionsPath[$i-1], $WaitTimeoutSec, $receiveMode;
+				$jobString = '{0} -Path "{1}" -WaitTimeoutSec {2} -Receivemode "{3}"' -f $pathMessageHelper, $subscriptionPaths[$i-1], $WaitTimeoutSec, $receiveMode;
 				$jobString = [Scriptblock]::Create("1.."+$receiveCyclesPerReceiver+" | % {"+$jobString+"}")
 				# write-host $jobString;
 				$jobStart = Start-Job -ScriptBlock $jobString;
@@ -103,7 +110,11 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			
 			# Get Message count from the subscriptions
 			$getSubscriptions = New-Object System.Collections.ArrayList;
-			foreach ($sub in Get-SBSubscriptions -TopicPath $topicName ) {
+			# DFTODO - what is this for? 
+			# if I understand this code correctly, "Get-SBSubscriptios" returns a list of subscriptions
+			# so this is already an array. Why do we then loop through it and add its items to an ArrayList?
+			foreach ($sub in Get-SBSubscriptions -TopicPath $topicName ) 
+			{
 				$getSubscriptions.Add($sub);
 			}
 			
@@ -144,7 +155,7 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			##########################################################
 			# Cleanup
 			##########################################################
-			Remove-Job $newJobs
+			Remove-Job $newJobs;
 		}
 	}
 }

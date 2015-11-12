@@ -1,5 +1,5 @@
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$sut = (Split-Path -Leaf $MyInvocation.MyCommand.Path).Replace(".Tests.", ".")
+# $sut = (Split-Path -Leaf $MyInvocation.MyCommand.Path).Replace(".Tests.", ".")
 
 function Stop-Pester($message = "EMERGENCY: Script cannot continue.")
 {
@@ -8,13 +8,22 @@ function Stop-Pester($message = "EMERGENCY: Script cannot continue.")
 	$PSCmdlet.ThrowTerminatingError($e);
 }
 
-Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
+Describe -Tags "SBClient.Tests" "SBClient.Tests" {
 
 	Mock Export-ModuleMember { return $null; }
 	
-	Context "SBClientSinglecast.Tests" {
+	# . "$here\$sut"
+	# . "$here\Enter-Server.ps1"
+	# . "$here\Get-Message.ps1"
+	# . "$here\ServcieBusClientTest.ps1"
+	
+	Context "SBClientQueue.Tests" {
 		
 		BeforeEach {		
+			# $moduleName = 'biz.dfch.PS.Azure.ServiceBus.Client';
+			# Remove-Module $moduleName -ErrorAction:SilentlyContinue;
+			# Import-Module $moduleName;
+			
 			# Management module for service bus - required to create, check and delete queues/topis/subscriptions
 			$moduleName = 'biz.dfch.PS.Azure.ServiceBus.Setup';
 			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
@@ -25,12 +34,15 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 			
 			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
 			# Import Modul from git repo
-			Import-Module "$here\..\src\$moduleName.psd1" -Force
+			Import-Module "$here\$moduleName.psd1" -Force
 			# Set variable to the loacal environment
 			$biz_dfch_PS_Azure_ServiceBus_Client.EndpointServerName = (Get-SBFarm).Hosts[0].Name;
 			$biz_dfch_PS_Azure_ServiceBus_Client.DefaultNameSpace = (Get-SBNamespace).Name;
 			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKeyName = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.DefaultNameSpace -Name RootManageSharedAccessKey).KeyName;
 			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.DefaultNameSpace -Name RootManageSharedAccessKey).PrimaryKey;
+			
+			# Import-Module "C:\development\projects\GitHub\biz.dfch.PS.Azure.ServiceBus.Management\src\biz.dfch.PS.Azure.ServiceBus.Management.psd1" -Force -ErrorAction:SilentlyContinue;
+			# $biz_dfch_PS_Azure_ServiceBus_Management.DefaultNameSpace = (Get-SBNamespace).Name;
 			
 			# Create Topic
 			$topicName = "PesterTestTopic";
@@ -44,12 +56,110 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 			Remove-SBTopic -Path $topicName -force;
 		}
 		
+		# It "NewMessages-NamespaceIsAviable" {
+			# # Arrange
+			# $absoluteUri = "sb://"+$biz_dfch_PS_Azure_ServiceBus_Client.EndpointServerName+":9354/"+$biz_dfch_PS_Azure_ServiceBus_Client.DefaultNameSpace;
+			
+			# # Act
+			
+			# # Assert
+			# $enterSBServer.Address.AbsoluteUri | Should Be $absoluteUri; #sb://win-8a036g6jvpj:9354/ServiceBusDefaultNamespace"
+		# }
+		
+		# It "NewMessages-CreateMessageIncreaseQueueMessageCount" -Test {
+			# # Arrange
+			# $messageText = 'Pester-Test-Message';
+			
+			# # Act			
+			# $newSBMessage = New-SBMessage $messageText -QueueName $queueName;
+			# $queue = Get-SBQueue -Path $queueName;
+			
+			# # Assert
+			# $queue.MessageCount | Should Be 1;
+		# }
+		
+		# It "NewMessages-GetMessage" -Test {
+			# # Arrange
+			# $messageText = 'Pester-Test-Message';
+			
+			# # Act			
+			# $newSBMessage = New-SBMessage $messageText -QueueName $queueName;
+			
+			# # Assert 
+			
+			# $getSBMessage = Get-SBMessage -BodyAsProperty -QueueName $queueName -ReceiveMode 'ReceiveAndDelete';
+			
+			# # Assert
+			# $newSBMessage | Should Not Be $null;
+			# $getSBMessage.Properties['Body'] | Should Be $messageText;
+		# }
+		
+		It "NewMessages-Broadcast" -Test {
+			# Arrange MessageReceiver (separate sessions)
+			$receiveMode = 'ReceiveAndDelete';
+			$waitTimeoutSec = 10;
+			$amountOfReceiver = 5;
+			$pathMessageHelper = "$here\getMessageHelper.ps1"
+			$newJobs = New-Object System.Collections.ArrayList
+			$subscriptionsPath = New-Object System.Collections.ArrayList
+			
+			for ($i=1; $i -le $amountOfReceiver; $i++){
+				# Arrange Subscriptions
+				$subscriptionsName = "PesterTestSub"+$i;
+				$subscriptionsPath.Add($topicName +"\Subscriptions\"+$subscriptionsName);
+				
+				New-SBSubscription -TopicPath $topicName -Name $subscriptionsName;
+				
+				# Arrange Receive Sessions
+				$jobString = '{0} -Path "{1}" -WaitTimeoutSec {2} -Receivemode "{3}"' -f $pathMessageHelper, $subscriptionsPath[$i-1], $WaitTimeoutSec, $receiveMode;
+				$jobString = [Scriptblock]::Create($jobString)
+				$job = Start-Job -ScriptBlock $jobString;
+				$newJobs.Add($job);
+			}
+			
+			# Arrange MessageSender
+			$newSender1 = New-SBMessageSender -QueueName $topicName;
+			
+			# Arrange Message
+			$messageText1 = "TestMessageBroadcast"
+			
+			# Act Send Message
+			$messageAmount = 0;
+			$newSBMessage1 = New-SBMessage $messageText1 -QueueName $topicName -MessageClient $newSender1;
+			
+			# Get Message count from the subscriptions
+			$getSubscriptions = New-Object System.Collections.ArrayList;
+			foreach ($sub in Get-SBSubscriptions -TopicPath $topicName ) {
+				$getSubscriptions.Add($sub);
+			}
+				
+			# Act Receive Message
+			$null = Wait-Job -Job $newJobs;
+			$jobResults = Receive-Job $newJobs;
+			
+			# Assert
+			$newSBMessage1 | Should Not Be $null;
+			$jobResults.count | Should Be $amountOfReceiver;
+			
+			# Check subscriptions message count
+			foreach ($subscription in $getSubscriptions) {
+				$subscription.MessageCount | Should Be $messageAmount;
+			}
+			
+			# Check subscription messageId
+			foreach ($jobResult in $jobResults) {
+				$jobResult.MessageId  | Should Be $newSBMessage1;
+			}
+			
+			# Cleanup
+			Remove-Job $newJobs
+		}
+		
 		It "NewMessages-Singlecast" -Test {
 			# Arrange Subscriptions
-			$subscriptionName = 'PesterTestSub';
-			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
-
-			New-SBSubscription -TopicPath $topicName -Name $subscriptionName;
+			$subscriptionsName = "PesterTestSub";
+			$subscriptionsPath = $topicName +"\Subscriptions\"+$subscriptionsName;
+			New-SBSubscription -TopicPath $topicName -Name $subscriptionsName;
 			
 			# Arrange MessageReceiver (separate sessions)
 			$receiveMode = 'ReceiveAndDelete';
@@ -58,9 +168,8 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 			$pathMessageHelper = "$here\getMessageHelper.ps1"
 			$newJobs = New-Object System.Collections.ArrayList
 			
-			for ($i=1; $i -le $amountOfReceiver; $i++)
-			{
-				$jobString = '{0} -Path "{1}" -WaitTimeoutSec {2} -Receivemode "{3}"' -f $pathMessageHelper, $subscriptionPath, $WaitTimeoutSec, $receiveMode;
+			for ($i=1; $i -le $amountOfReceiver; $i++){
+				$jobString = '{0} -Path "{1}" -WaitTimeoutSec {2} -Receivemode "{3}"' -f $pathMessageHelper, $subscriptionsPath, $WaitTimeoutSec, $receiveMode;
 				$jobString = [Scriptblock]::Create($jobString)
 				$job = Start-Job -ScriptBlock $jobString;
 				$newJobs.Add($job);
@@ -83,7 +192,7 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 			$jobResults = Receive-Job $newJobs;
 			
 			# Assert			
-			($jobResults | where { $_ -ne $null }).Count | Should Be 2;
+			($jobResults | where { $_ -ne $null }).count | Should Be 2;
 			$newSBMessage1 | Should Not Be $null;
 			$newSBMessage2 | Should Not Be $null;
 			$jobResults.MessageId -contains $newSBMessage1 | Should Be $true;
@@ -92,6 +201,104 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 			# Cleanup
 			Remove-Job $newJobs
 		}
+		
+		# It "NewMessages-OneMessageCanOnlyReadByOneReceiver" -Test {
+			# # Arrange
+			# $messageText = 'Pester-Test-Message';
+			# $newReceiver1 = New-SBMessageReceiver -QueueName $queueName -ReceiveMode 'ReceiveAndDelete';
+			# $newReceiver2 = New-SBMessageReceiver -QueueName $queueName -ReceiveMode 'ReceiveAndDelete';
+			# $newReceiver3 = New-SBMessageReceiver -QueueName $queueName -ReceiveMode 'ReceiveAndDelete';
+			
+			
+			# # Act			
+			# $newSBMessage = New-SBMessage $messageText -QueueName $queueName;
+			# $getSBMessage = Get-SBMessage -BodyAsProperty -QueueName $queueName -ReceiveMode 'ReceiveAndDelete' -MessageClient $newReceiver1;
+			
+			# $getSBMessageSecond = Get-SBMessage -WaitTimeoutSec 1 -QueueName $queueName -MessageClient $newReceiver2;
+			# $getSBMessageThird = Get-SBMessage -WaitTimeoutSec 1 -QueueName $queueName -MessageClient $newReceiver3;
+			
+			# # Assert
+			# $newSBMessage | Should Not Be $null;
+			# $getSBMessage | Should Not Be $null;
+			# $getSBMessage.Properties['Body'] | Should Be $messageText;
+			
+			# $getSBMessageSecond | Should Be $null;
+			# $getSBMessageThird | Should Be $null;
+		# }
+		
+		# It "NewMessages-OneMessageCanOnlyReadByOneReceiver" -Test {
+			# # # Arrange
+					
+			# # $amountSenders = 1;
+			
+			# # $senderClients = CreateMessageSenders -amountSenders $amountSenders -queueName $queueName;
+			
+			# # $job = funktion ($bla)
+			
+			
+			# # $messageText1 = 'Pester-Test-Message1';
+			# # $messageText2 = 'Pester-Test-Message2';
+			# # $messageText3 = 'Pester-Test-Message3';
+			# # $newSender1 = New-SBMessageSender -QueueName $queueName;
+			# # $newSender2 = New-SBMessageSender -QueueName $queueName;
+			# # $newSender3 = New-SBMessageSender -QueueName $queueName;
+			# # $newReceiver1 = New-SBMessageReceiver -QueueName $queueName -ReceiveMode 'ReceiveAndDelete';
+			# # $newReceiver2 = New-SBMessageReceiver -QueueName $queueName -ReceiveMode 'ReceiveAndDelete';
+			# # $newReceiver3 = New-SBMessageReceiver -QueueName $queueName -ReceiveMode 'ReceiveAndDelete';
+			
+			
+			# # # Act			
+			# # $newSBMessage1 = New-SBMessage $messageText1 -QueueName $queueName -MessageClient $newSender1;
+			# # $newSBMessage2 = New-SBMessage $messageText1 -QueueName $queueName -MessageClient $newSender2;
+			# # $newSBMessage3 = New-SBMessage $messageText1 -QueueName $queueName -MessageClient $newSender3;
+			
+			# # $getQueueAfterCreation = Get-SBQueue -Path $queueName;
+			
+			# # $getSBMessage1 = Get-SBMessage -BodyAsProperty -QueueName $queueName -ReceiveMode 'ReceiveAndDelete' -MessageClient $newReceiver1;
+			# # $getSBMessage2 = Get-SBMessage -BodyAsProperty -QueueName $queueName -ReceiveMode 'ReceiveAndDelete' -MessageClient $newReceiver2;
+			# # $getSBMessage3 = Get-SBMessage -BodyAsProperty -QueueName $queueName -ReceiveMode 'ReceiveAndDelete' -MessageClient $newReceiver3;
+			
+			# # $getQueueAfterGetMessages = Get-SBQueue -Path $queueName;
+			
+			# # # Assert
+			# # $newSBMessage1 | Should Not Be $null;
+			# # $newSBMessage2 | Should Not Be $null;
+			# # $newSBMessage3 | Should Not Be $null;
+			
+			# # $getQueueAfterMessageCreation | Should Be 3;
+			# # $getQueueAfterGetMessages | Should Be 0;
+			
+			# # $getSBMessage1 | Should Not Be $null;
+			# # $getSBMessage2 | Should Not Be $null;
+			# # $getSBMessage3 | Should Not Be $null;
+			
+			# # $getSBMessage1.Properties['Body'] | Should Be $messageText1 or $messageText2 or $messageText3;
+		# }
+		
+		# # It "NewMessages-CreateOneMessageWithOneSender" -Test {
+			# # # Arrange
+			# # $msg = 'Pester-Test-Message';
+			
+			# # # Act			
+			# # $newSBMsg = New-SBMessage $msg -QueueName 'notify-wfe';
+			# # $getSBMsg = Get-SBMessage -BodyAsProperty -ReceiveMode 'ReceiveAndDelete';
+			
+			# # $newSender1 = New-SBMessageSender -QueueName 'notify-wfe';
+			# # $newReceiver1 = New-SBMessageReceiver -QueueName 'notify-wfe' -ReceiveMode 'ReceiveAndDelete';
+			# # $newSBMsg1 = New-SBMessage $msg -MessageClient $newSender1;
+			# # $getSBMsg1 = Get-SBMessageBody(Get-SBMessage -MessageClient $newReceiver1);
+			# # $newSender1 = New-SBMessageSender -QueueName 'notify-wfe';
+			# # $newReceiver1 = New-SBMessageReceiver -QueueName 'notify-wfe' -ReceiveMode 'ReceiveAndDelete';
+			# # $newSBMsg1 = New-SBMessage $msg -MessageClient $newSender1;
+			# # $getSBMsg1 = Get-SBMessageBody(Get-SBMessage -MessageClient $newReceiver1);
+			# # # Assert
+			# # $enterSBServer.Address.AbsoluteUri | Should Be 'sb://win-8a036g6jvpj:9354/ServiceBusDefaultNamespace';
+			# # $newSBMsg | Should Not Be $null;
+			# # # $getSBMsg.Properties['Body'] | Should Be $msg;
+			
+			# # $newSBMsg1 | Should Not Be $null;
+			# # # $getSBMsg1 | Should Be $msg;
+		# # }
 	}
 }
 
