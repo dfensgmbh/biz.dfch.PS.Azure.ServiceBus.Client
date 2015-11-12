@@ -26,24 +26,27 @@ Param
 	# [Required] The Message such as 'Message 123'.
 	[Parameter(Mandatory = $true, Position = 0)]
 	[ValidateNotNullorEmpty()]
-	$Message
+	$InputObject
 	,
 	# [Optional] Set message id.
 	[Parameter(Mandatory = $false, Position = 1)]
-	[string] $MessageId
+	[alias("MessageId")]
+	[string] $Id
 	, 
 	# [Optional] Sets a application specific label.
 	[Parameter(Mandatory = $false, Position = 2)]
-	[string] $MessageLabel
+	[alias("MessageLabel")]
+	[string] $Label
 	, 
 	# [Optional] Sets addional message properties.
-	[Parameter(Mandatory = $false, Position = 3)]
-	[hashtable] $MessageProperties
+	[Parameter(Mandatory = $false, Position = 3)]	
+	[hashtable] $Properties
 	, 
 	# [Optional] The TimeToLive is the duration after which the message expires, starting from when the message is sent to the Service Bus.
 	[Parameter(Mandatory = $false, Position = 4)]
 	[ValidateNotNullorEmpty()]
-	[int] $MessageTimeToLiveSec
+	[alias("ttl")]
+	[int] $TimeToLiveSec
 	, 
 	# [Optional] The Facility such as 'MyQueue'. If you do not specify this 
 	# value it is taken from the module configuration file.
@@ -52,27 +55,28 @@ Param
 	[alias("queue")]
 	[alias("topic")]
 	[alias("QueueName")]
-	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultSendFacility
+	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SendFacility
 	, 
 	# [Optional] The Format such as 'JSON'. If you do not specify this 
 	# value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 6)]
 	[ValidateNotNullorEmpty()]
-	[string] $MessageFormat = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Format
+	[string] $Format = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Format
 	, 
-	# [Optional] MessageClient
+	# [Optional] Messaging Client (instance of the MessagingFactory)
 	[Parameter(Mandatory = $false, Position = 7)]
-	$MessageClient
+	[alias("MessageClient")]
+	$Client
 	,
-	# [Optional] The CmdRetries. If you do not specify this 
+	# [Optional] The Retry. If you do not specify this 
 	# value it is taken from the module configuration file.
 	[Parameter(Mandatory=$false, Position = 8)]
-	[int]$CmdRetries = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandRetries 
+	[int]$Retry = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandRetry 
 	,
-	# [Optional] The CmdSecDelay. If you do not specify this 
+	# [Optional] The RetryInterval. If you do not specify this 
 	# value it is taken from the module configuration file.
 	[Parameter(Mandatory=$false, Position = 9)]
-	[int]$CmdSecDelay = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandSecDelay
+	[int]$RetryInterval = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandRetryInterval
 )
 
 BEGIN 
@@ -97,30 +101,37 @@ PROCESS
 		$var = Get-Variable -Name $key -ErrorAction SilentlyContinue;
 		if($var)
 		{
-			if ( @('CmdRetries', 'CmdSecDelay') -notcontains $($var.name) -and $var.value -ne $null -and $($var.value) -ne '' ) 
+			if ( @('Retry', 'RetryInterval') -notcontains $($var.name) -and $var.value -ne $null -and $($var.value) -ne '' ) 
 			{
 				$Params.Add($($var.name), $var.value);
 			}
 		}
 	}
-	Log-Debug $fn ("Command [{0}] arguments: {1}" -f ($fn -replace 'Worker', ''), ($Params | Out-String));
+	Log-Debug $fn ("Operation [{0}] arguments: {1}" -f ($fn -replace 'Worker', ''), ($Params | Out-String));
 
-	while (-not $fReturn) {
-		try {
-			$OutputParameter = New-Message-Worker @Params;
-			$fReturn = $true;
-		} catch {
-			if ($CmdRetryCount -ge $CmdRetries) {
-				Log-Error $fn ("Command [{0}] failed the maximum number of {1} times." -f ($fn -replace 'Worker', ''), $CmdRetryCount);
+	# Retry handling
+	for($c = 1; $c -le ($Retry+1); $c++)
+	{
+		try
+		{
+			$OutputParameter = New-MessageWorker @Params;
+			break;
+		}
+		catch
+		{
+			# Throw last execption
+			if ( $c -gt $Retry -or $_.Exception.Message -match 'Connect to the message factory before using the Cmdlet.' )
+			{
 				throw;
-			} else {
-				Log-Error $fn ("Command [{0}] failed. Retrying in {1} seconds." -f ($fn -replace 'Worker', ''), $CmdSecDelay);
-				$CmdRetryCount++;
-				Start-Sleep ($CmdSecDelay * $CmdRetryCount);
 			}
+			Log-Debug $fn ("[{0}/{1}] Retrying operation [{2}]" -f $c, $Retry, ($fn -replace 'Worker', ''));
+			Start-Sleep -Seconds $RetryInterval;
+			$RetryInterval *= 2;
+			continue;
 		}
 	}
 	return $OutputParameter;
+	$fReturn = $true;
 
 }
 # PROCESS
@@ -135,7 +146,7 @@ END
 } # function
 if($MyInvocation.ScriptName) { Export-ModuleMember -Function New-Message; } 
 
-function New-Message-Worker {
+function New-MessageWorker {
 <#
 .SYNOPSIS
 Creates a message for the Service Bus Message Factory.
@@ -150,7 +161,7 @@ This Cmdlet returns the SequenceNumber from the MessageFactory Message object. O
 See PARAMETER section for a description of input parameters.
 
 .EXAMPLE
-$messageid = New-Message-Worker;
+$messageid = New-MessageWorker;
 
 Creates a message for the Service Bus Message Factory and against server defined within module configuration xml file.
 #>
@@ -163,24 +174,28 @@ Param
 	# [Required] The Message such as 'Message 123'.
 	[Parameter(Mandatory = $true, Position = 0)]
 	[ValidateNotNullorEmpty()]
-	$Message
+	$InputObject
 	,
 	# [Optional] Set message id.
 	[Parameter(Mandatory = $false, Position = 1)]
-	[string] $MessageId
+	[alias("MessageId")]
+	[string] $Id
 	, 
 	# [Optional] Sets a application specific label.
 	[Parameter(Mandatory = $false, Position = 2)]
-	[string] $MessageLabel
+	[alias("MessageLabel")]
+	[string] $Label
 	, 
 	# [Optional] Sets addional message properties.
 	[Parameter(Mandatory = $false, Position = 3)]
-	[hashtable] $MessageProperties
+	[alias("MessageProperties")]
+	[hashtable] $Properties
 	, 
 	# [Optional] The TimeToLive is the duration after which the message expires, starting from when the message is sent to the Service Bus.
 	[Parameter(Mandatory = $false, Position = 4)]
 	[ValidateNotNullorEmpty()]
-	[int] $MessageTimeToLiveSec
+	[alias("ttl")]
+	[int] $TimeToLiveSec
 	, 
 	# [Optional] The Facility such as 'MyQueue'. If you do not specify this 
 	# value it is taken from the module configuration file.
@@ -189,17 +204,18 @@ Param
 	[alias("queue")]
 	[alias("topic")]
 	[alias("QueueName")]
-	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultSendFacility
+	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SendFacility
 	, 
 	# [Optional] The Format such as 'JSON'. If you do not specify this 
 	# value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 6)]
 	[ValidateNotNullorEmpty()]
-	[string] $MessageFormat = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Format
+	[string] $Format = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Format
 	, 
-	# [Optional] MessageClient
+	# [Optional] Messaging Client (instance of the MessagingFactory)
 	[Parameter(Mandatory = $false, Position = 7)]
-	$MessageClient
+	[alias("MessageClient")]
+	$Client
 )
 
 BEGIN 
@@ -221,67 +237,68 @@ try
 	# Parameter validation
 	# N/A
 	
-	# Create MessageClient
+	# Create message client
 	try 
 	{
-		if ( !$PSBoundParameters.ContainsKey('MessageClient') ) 
+		if ( !$PSBoundParameters.ContainsKey('Client') ) 
 		{
-			$MessageClient = New-MessageSender -Facility $Facility;
+			$Client = New-MessageSender -Facility $Facility;
 		}
 	} 
 	catch 
 	{
 		$msg = $_.Exception.Message;
-		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $MessageClient;
+		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $Client;
 		Log-Error $fn -msg $msg;
 		$PSCmdlet.ThrowTerminatingError($e);
 	}
 
 	# Convert message body
-	$MessageBody = $Message.ToString();
-	# switch($MessageFormat) 
+	$MessageBody = $InputObject.ToString();
+	# switch($Format) 
 	# {
-		# 'xml' { $MessageBody = (ConvertTo-Xml -InputObject $Message).OuterXml; }
-		# 'xml-pretty' { $MessageBody = Format-Xml -String (ConvertTo-Xml -InputObject $Message).OuterXml; }
-		# 'json' { $MessageBody = ConvertTo-Json -InputObject $Message -Compress; }
-		# 'json-pretty' { $MessageBody = ConvertTo-Json -InputObject $Message; }
-		# Default { $MessageBody = $Message; }
+		# 'xml' { $MessageBody = (ConvertTo-Xml -InputObject $InputObject).OuterXml; }
+		# 'xml-pretty' { $MessageBody = Format-Xml -String (ConvertTo-Xml -InputObject $InputObject).OuterXml; }
+		# 'json' { $MessageBody = ConvertTo-Json -InputObject $InputObject -Compress; }
+		# 'json-pretty' { $MessageBody = ConvertTo-Json -InputObject $InputObject; }
+		# Default { $MessageBody = $InputObject; }
 	# }
 	
-	Log-Debug $fn ("-> MessageBody '{0}'; Type '{1}'; As '{2}'; AsType '{3}'" -f $MessageBody.toString(), $MessageBody.GetType(), $MessageFormat.toString(), $MessageFormat.GetType() );
+	Log-Debug $fn ("-> MessageBody '{0}'; Type '{1}'; As '{2}'; AsType '{3}'" -f $MessageBody.toString(), $MessageBody.GetType(), $Format.toString(), $Format.GetType() );
 		
-	# Create Message
+	# Create message
 	[Microsoft.ServiceBus.Messaging.BrokeredMessage] $BrokeredMessage = [Microsoft.ServiceBus.Messaging.BrokeredMessage]($MessageBody.ToString());
-	#$BrokeredMessage.Properties['Body'] = $MessageBody.ToString();
-	#$BrokeredMessage.Properties['BodyAs'] = $MessageFormat.ToString();
-	if ( $PSBoundParameters.ContainsKey('MessageProperties') ) 
+
+	# Set message properties
+	if ( $PSBoundParameters.ContainsKey('Properties') ) 
 	{
-		foreach ( $MessageProperty in $MessageProperties.GetEnumerator() ) 
+		foreach ( $MessageProperty in $Properties.GetEnumerator() ) 
 		{
 			$BrokeredMessage.Properties[$MessageProperty.Name] = $MessageProperty.Value.ToString();
 		}
 	}
-	if ( $PSBoundParameters.ContainsKey('MessageId') ) 
+	if ( $PSBoundParameters.ContainsKey('Id') ) 
 	{
-		$BrokeredMessage.MessageId = $MessageId;
+		$BrokeredMessage.MessageId = $Id;
 	}
-	if ( $PSBoundParameters.ContainsKey('MessageLabel') ) 
+	if ( $PSBoundParameters.ContainsKey('Label') ) 
 	{
-		$BrokeredMessage.Label = $MessageLabel;
+		$BrokeredMessage.Label = $Label;
 	}
-	if ( $PSBoundParameters.ContainsKey('MessageTimeToLiveSec') ) 
+	if ( $PSBoundParameters.ContainsKey('TimeToLiveSec') ) 
 	{
-		$BrokeredMessage.TimeToLive = (New-TimeSpan -Seconds $MessageTimeToLiveSec);
+		$BrokeredMessage.TimeToLive = (New-TimeSpan -Seconds $TimeToLiveSec);
 	}	
 	
 	try 
 	{
-		$MessageClient.Send($BrokeredMessage);	
+		# Send message
+		$Client.Send($BrokeredMessage);	
 	} 
 	catch 
 	{
 		$msg = $_.Exception.Message;
-		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $MessageClient;
+		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $Client;
 		Log-Error $fn -msg $msg;
 		$PSCmdlet.ThrowTerminatingError($e);
 	}

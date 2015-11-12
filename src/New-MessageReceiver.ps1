@@ -30,11 +30,12 @@ Creates a message receiver to the Service Bus Message Factory with default crede
 [OutputType([Microsoft.ServiceBus.Messaging.MessageReceiver])]
 Param 
 (
-	# [Optional] The MessageFactory. If you do not 
+	# [Optional] The Message Factory. If you do not 
 	# specify this value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 0)]
 	[ValidateNotNullorEmpty()]
-	$MessageFactory = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageFactory
+	[alias("MessageFactory")]
+	$Factory = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory
 	, 
 	# [Optional] The Facility such as 'MyQueue'. If you do not specify this 
 	# value it is taken from the module configuration file.
@@ -43,7 +44,7 @@ Param
 	[alias("queue")]
 	[alias("subscription")]
 	[alias("QueueName")]
-	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultReceiveFacility
+	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).ReceiveFacility
 	, 
 	# [Optional] The Receivemode such as 'PeekLock'. If you do not specify this 
 	# value it is taken from the default parameter.
@@ -63,21 +64,21 @@ BEGIN
 {
 	$datBegin = [datetime]::Now;
 	[string] $fn = $MyInvocation.MyCommand.Name;
-	Log-Debug $fn ("CALL. MessageFactory Endpoint '{0}'; Facility '{1}'; Username '{2}'" -f $MessageFactory.Address.AbsolutePath, $Facility, $Credential.Username ) -fac 1;
+	Log-Debug $fn ("CALL. MessageFactory Endpoint '{0}'; Facility '{1}'; Username '{2}'" -f $Factory.Address.AbsolutePath, $Facility, $Credential.Username ) -fac 1;
 	
-	# Check MessageFactory connection
-	if ( $MessageFactory -isnot [Microsoft.ServiceBus.Messaging.MessagingFactory] ) 
+	# Check message factory connection
+	if ( $Factory -isnot [Microsoft.ServiceBus.Messaging.MessagingFactory] ) 
 	{
-		$msg = "MessageFactory: Parameter validation FAILED. Connect to the message factory before using the Cmdlet.";
-		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $MessageFactory;
+		$msg = "Factory: Parameter validation FAILED. Connect to the message factory before using the Cmdlet.";
+		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $Factory;
 		$PSCmdlet.ThrowTerminatingError($e);
 	}
 	
-	# Check MessageFactory status
-	if ( $MessageFactory.IsClosed ) 
+	# Check message factory status
+	if ( $Factory.IsClosed ) 
 	{
-		Log-Info $fn ("MessageFactory Endpoint '{0}' is closed -> reconnect" -f $MessageFactory.Address.AbsolutePath, $Facility, $Credential.Username ) -fac 1;
-		[Microsoft.ServiceBus.Messaging.MessagingFactory] $MessageFactory = Enter-ServiceBus -EndpointServerName $MessageFactory.Address.Host -RuntimePort $MessageFactory.Address.Port -Namespace $MessageFactory.Address.Segments[-1];
+		Log-Info $fn ("MessageFactory Endpoint '{0}' is closed -> reconnect" -f $Factory.Address.AbsolutePath, $Facility, $Credential.Username ) -fac 1;
+		[Microsoft.ServiceBus.Messaging.MessagingFactory] $Factory = Enter-ServiceBus -EndpointServerName $Factory.Address.Host -RuntimePort $Factory.Address.Port -Namespace $Factory.Address.Segments[-1];
 	}
 }
 # BEGIN 
@@ -92,25 +93,25 @@ try
 	# Parameter validation
 	# N/A
 
-	# Prepare MessageClient
-	[Microsoft.ServiceBus.Messaging.MessageReceiver] $MessageReceiverClient = $null;
-	# Get MessageClient from global
-	if ( (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient -is [Microsoft.ServiceBus.Messaging.MessageReceiver] ) 
+	# Get message client
+	[Microsoft.ServiceBus.Messaging.MessageReceiver] $Client = $null;
+	# Get message client from global
+	if ( (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client -is [Microsoft.ServiceBus.Messaging.MessageReceiver] ) 
 	{
-		if ( !(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient.IsClosed -and (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient.Path -eq $Facility -and (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient.Mode -eq $Receivemode ) 
+		if ( !(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client.IsClosed -and (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client.Path -eq $Facility -and (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client.Mode -eq $Receivemode ) 
 		{
-			[Microsoft.ServiceBus.Messaging.MessageReceiver] $MessageReceiverClient = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient;
+			[Microsoft.ServiceBus.Messaging.MessageReceiver] $Client = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client;
 		}
 	}
 
-	# Create MessageClient
-	if ( $MessageReceiverClient -eq $null ) 
+	# Create message client
+	if ( $Client -eq $null ) 
 	{
-		[Microsoft.ServiceBus.Messaging.MessageReceiver] $MessageReceiverClient = $MessageFactory.CreateMessageReceiver($Facility, [Microsoft.ServiceBus.Messaging.ReceiveMode]::$ReceiveMode);
+		[Microsoft.ServiceBus.Messaging.MessageReceiver] $Client = $Factory.CreateMessageReceiver($Facility, [Microsoft.ServiceBus.Messaging.ReceiveMode]::$ReceiveMode);
 	}
-	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient = $MessageReceiverClient;
+	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client = $Client;
 	
-	$OutputParameter = $MessageReceiverClient;
+	$OutputParameter = $Client;
 	$fReturn = $true;
 
 }

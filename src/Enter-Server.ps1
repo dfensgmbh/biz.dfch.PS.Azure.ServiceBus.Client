@@ -56,7 +56,7 @@ Param
 	# [Optional] The Namespace such as 'ServiceBusDefaultNamespace'. If you do not specify this 
 	# value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 4)]
-	[string] $Namespace = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultNameSpace
+	[string] $Namespace = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).NameSpace
 	,
 	# [Optional] The TransportType such as 'Amqp'. If you do not specify this 
 	# value it is taken from the module configuration file.
@@ -90,9 +90,10 @@ try
 	# Parameter validation
 	# N/A
 	
-	# Get local instance parameters
-	if ( !(!(Get-Module ServiceBus -EA SilentlyContinue)) -and $EndpointServerName -eq 'EndpointServerName' )
+	# Get local instance parameters	
+	if ( !(!(Get-Module ServiceBus -ListAvailable -EA SilentlyContinue)) -and $EndpointServerName -eq 'EndpointServerName' )
 	{
+		Import-Module -Name ServiceBus -EA SilentlyContinue;
 		if ( (Get-SBFarm).Hosts[0].Name -eq $env:Computername ) 
 		{
 			$EndpointServerName = (Get-SBFarm).Hosts[0].Name;
@@ -106,10 +107,10 @@ try
 	$ConnectionString = 'Endpoint=sb://{0}/{1};RuntimePort={2};SharedAccessKeyName={3};SharedAccessKey={4};TransportType={5}' -f $EndpointServerName, $Namespace, $RuntimePort, $SharedAccessKeyName, $SharedAccessKey, $TransportType;
 	
 	# Create message factory
-	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageFactory = [Microsoft.ServiceBus.Messaging.MessagingFactory]::CreateFromConnectionString($ConnectionString);
-	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient = $null;
+	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory = [Microsoft.ServiceBus.Messaging.MessagingFactory]::CreateFromConnectionString($ConnectionString);
+	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client = $null;
 	
-	$OutputParameter = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageFactory;
+	$OutputParameter = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory;
 	$fReturn = $true;
 
 }

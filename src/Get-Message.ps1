@@ -62,11 +62,12 @@ Param
 	[alias("queue")]
 	[alias("subscription")]
 	[alias("QueueName")]
-	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultReceiveFacility
+	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).ReceiveFacility
 	, 
-	# [Optional] MessageClient
+	# [Optional] Messaging Client (instance of the MessagingFactory)
 	[Parameter(Mandatory = $false, Position = 7)]
-	$MessageClient
+	[alias("MessageClient")]
+	$Client
 	,
 	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
 	# which to perform login. Default is credential as specified in the module 
@@ -75,15 +76,15 @@ Param
 	[alias("cred")]
 	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
 	,
-	# [Optional] The CmdRetries. If you do not specify this 
+	# [Optional] The Retry. If you do not specify this 
 	# value it is taken from the module configuration file.
 	[Parameter(Mandatory=$false, Position = 9)]
-	[int]$CmdRetries = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandRetries 
+	[int]$Retry = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandRetry
 	,
-	# [Optional] The CmdSecDelay. If you do not specify this 
+	# [Optional] The RetryInterval. If you do not specify this 
 	# value it is taken from the module configuration file.
 	[Parameter(Mandatory=$false, Position = 10)]
-	[int]$CmdSecDelay = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandSecDelay
+	[int]$RetryInterval = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandRetryInterval
 )
 
 BEGIN 
@@ -99,8 +100,8 @@ PROCESS
 {
 
 	[boolean] $fReturn = $false;
-	[int] $CmdRetryCount = 0;
 
+	# Get all parameters
 	$Params = @{};
 	$ParamsList = (Get-Command -Name $MyInvocation.InvocationName).Parameters;
 	foreach ($key in $ParamsList.keys)
@@ -108,30 +109,37 @@ PROCESS
 		$var = Get-Variable -Name $key -ErrorAction SilentlyContinue;
 		if($var)
 		{
-			if ( @('CmdRetries', 'CmdSecDelay') -notcontains $($var.name) -and $var.value -ne $null -and $($var.value) -ne '' )  
+			if ( @('Retry', 'RetryInterval') -notcontains $($var.name) -and $var.value -ne $null -and $($var.value) -ne '' )  
 			{
 				$Params.Add($($var.name), $var.value);
 			}
 		}
 	}
-	Log-Debug $fn ("Command [{0}] arguments: {1}" -f ($fn -replace 'Worker', ''), ($Params | Out-String));
-
-	while (-not $fReturn) {
-		try {
-			$OutputParameter = Get-Message-Worker @Params;
-			$fReturn = $true;
-		} catch {
-			if ($CmdRetryCount -ge $CmdRetries) {
-				Log-Error $fn ("Command [{0}] failed the maximum number of {1} times." -f ($fn -replace 'Worker', ''), $CmdRetryCount);
+	Log-Debug $fn ("Operation [{0}] arguments: {1}" -f ($fn -replace 'Worker', ''), ($Params | Out-String));
+	
+	# Retry handling
+	for($c = 1; $c -le ($Retry+1); $c++)
+	{
+		try
+		{
+			$OutputParameter = Get-MessageWorker @Params;
+			break;
+		}
+		catch
+		{
+			# Throw last execption
+			if ( $c -gt $Retry -or $_.Exception.Message -match 'Connect to the message factory before using the Cmdlet.' )
+			{
 				throw;
-			} else {
-				Log-Error $fn ("Command [{0}] failed. Retrying in {1} seconds." -f ($fn -replace 'Worker', ''), $CmdSecDelay);
-				$CmdRetryCount++;
-				Start-Sleep ($CmdSecDelay * $CmdRetryCount);
 			}
+			Log-Debug $fn ("[{0}/{1}] Retrying operation [{2}]" -f $c, $Retry, ($fn -replace 'Worker', ''));
+			Start-Sleep -Seconds $RetryInterval;
+			$RetryInterval *= 2;
+			continue;
 		}
 	}
 	return $OutputParameter;
+	$fReturn = $true;
 
 }
 # PROCESS
@@ -146,7 +154,7 @@ END
 } # function
 if($MyInvocation.ScriptName) { Export-ModuleMember -Function Get-Message; } 
 
-function Get-Message-Worker {
+function Get-MessageWorker {
 <#
 .SYNOPSIS
 Creates a message for the Service Bus Message Factory.
@@ -161,7 +169,7 @@ This Cmdlet returns the SequenceNumber from the MessageFactory Message object. O
 See PARAMETER section for a description of input parameters.
 
 .EXAMPLE
-$message = Get-Message-Worker;
+$message = Get-MessageWorker;
 
 Creates a message for the Service Bus Message Factory and against server defined within module configuration xml file.
 #>
@@ -210,11 +218,12 @@ Param
 	[alias("queue")]
 	[alias("subscription")]
 	[alias("QueueName")]
-	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultReceiveFacility
+	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).ReceiveFacility
 	, 
-	# [Optional] MessageClient
+	# [Optional] Messaging Client (instance of the MessagingFactory)
 	[Parameter(Mandatory = $false, Position = 7)]
-	$MessageClient
+	[alias("MessageClient")]
+	$Client
 	,
 	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
 	# which to perform login. Default is credential as specified in the module 
@@ -246,17 +255,17 @@ try
 		$Receivemode = 'ReceiveAndDelete';
 	}
 	
-	# Create MessageClient
-	if ( !$PSBoundParameters.ContainsKey('MessageClient') ) 
+	# Create Client
+	if ( !$PSBoundParameters.ContainsKey('Client') ) 
 	{
 		try 
 		{
-			$MessageClient = New-MessageReceiver -Facility $Facility -Receivemode $Receivemode;
+			$Client = New-MessageReceiver -Facility $Facility -Receivemode $Receivemode;
 		} 
 		catch 
 		{
 			$msg = $_.Exception.Message;
-			$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $MessageClient;
+			$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $Client;
 			Log-Error $fn -msg $msg;
 			$PSCmdlet.ThrowTerminatingError($e);
 		}
@@ -266,7 +275,7 @@ try
 	try 
 	{
 		# DFTODO - is this really an AMQP message when we are using the BrokeredMessage class?, see #5
-		[Microsoft.ServiceBus.Messaging.BrokeredMessage] $BrokeredMessage = $MessageClient.Receive((New-TimeSpan -Seconds $WaitTimeoutSec));
+		[Microsoft.ServiceBus.Messaging.BrokeredMessage] $BrokeredMessage = $Client.Receive((New-TimeSpan -Seconds $WaitTimeoutSec));
 	} catch {
 		$msg = $_.Exception.Message;
 		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $BrokeredMessage;
