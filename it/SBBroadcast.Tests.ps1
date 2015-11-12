@@ -11,13 +11,7 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 
 	Mock Export-ModuleMember { return $null; }
 	
-	# . "$here\$sut"
-	# . "$here\Enter-Server.ps1"
-	# . "$here\Get-Message.ps1"
-	# . "$here\ServcieBusClientTest.ps1"
-	
 	Context "SBClientBroadcast.Tests" {
-		
 		BeforeEach {		
 			# Management module for service bus - required to create, check and delete queues/topis/subscriptions
 			$moduleName = 'biz.dfch.PS.Azure.ServiceBus.Setup';
@@ -27,6 +21,7 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			# Set Modulname
 			$moduleName = "biz.dfch.PS.Azure.ServiceBus.Client"
 			
+			# Remove Module if it is imported
 			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
 			# Import Modul from git repo
 			Import-Module "$here\..\src\$moduleName.psd1" -Force
@@ -46,42 +41,65 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 		}
 		
 		AfterEach {
-			#Cleanup
+			#Cleanup - Delete Topic and all relatet subscriptions and messages
 			Remove-SBTopic -Path $topicName -force;
 		}
 				
 		It "NewMessages-Broadcast" -Test {
-			# Arrange MessageReceiver (separate sessions)
+			##########################################################
+			# Arrange
+			##########################################################
+			$pathMessageHelper = "$here\getMessageHelper.ps1"
+
+			# Arrange test parameter
 			$receiveMode = 'PeekLock';
 			$waitTimeoutSec = 10;
 			$amountOfReceiver = 5;
-			$pathMessageHelper = "$here\getMessageHelper.ps1"
-			$newJobs = New-Object System.Collections.ArrayList
-			$subscriptionsPath = New-Object System.Collections.ArrayList
+			$receiveCyclesPerReceiver = 10;
+			$amountMessageSender = 3;
+			$messageAmount = 5;
+			$numberOfSender = 3;
+			$messageText = "TestMessageBroadcast"
 			
+			# Arrange MessageReceiver (separate sessions)
+			$newJobs = New-Object System.Collections.ArrayList
+			$subscriptionsPath = New-Object System.Collections.ArrayList;
+
 			for ($i=1; $i -le $amountOfReceiver; $i++){
 				# Arrange Subscriptions
 				$subscriptionsName = "PesterTestSub"+$i;
 				$subscriptionsPath.Add($topicName +"\Subscriptions\"+$subscriptionsName);
-				
-				New-SBSubscription -TopicPath $topicName -Name $subscriptionsName;
+				New-SBSubscription -TopicPath $topicName -Name $subscriptionsName -LockDuration 300;
 				
 				# Arrange Receive Sessions
 				$jobString = '{0} -Path "{1}" -WaitTimeoutSec {2} -Receivemode "{3}"' -f $pathMessageHelper, $subscriptionsPath[$i-1], $WaitTimeoutSec, $receiveMode;
-				$jobString = [Scriptblock]::Create($jobString)
-				$job = Start-Job -ScriptBlock $jobString;
-				$newJobs.Add($job);
+				$jobString = [Scriptblock]::Create("1.."+$receiveCyclesPerReceiver+" | % {"+$jobString+"}")
+				# write-host $jobString;
+				$jobStart = Start-Job -ScriptBlock $jobString;
+				$newJobs.Add($jobStart);
 			}
 			
 			# Arrange MessageSender
-			$newSender1 = New-SBMessageSender -QueueName $topicName;
+			$messageSenders = New-Object System.Collections.ArrayList;
+			for ($i=1; $i -le $amountMessageSender; $i++) {
+				$messageSenderNew = New-SBMessageSender -QueueName $topicName;
+				$messageSenders.Add($messageSenderNew);
+			}
 			
-			# Arrange Message
-			$messageText1 = "TestMessageBroadcast"
-			
-			# Act Send Message
-			$messageAmount = 1;
-			$newSBMessage1 = New-SBMessage $messageText1 -QueueName $topicName -MessageClient $newSender1;
+			##########################################################
+			# Act
+			##########################################################
+			# Send Message
+			$messageIds = New-Object System.Collections.ArrayList;
+			for ($i=1; $i -le $messageAmount; $i++) {
+				if ($amountMessageSender -eq $amountMessageSender) {
+					$numberOfSender = 1;
+				} else {
+					$numberOfSender++;
+				}
+				$messageIdNew = New-SBMessage $messageText -QueueName $topicName -MessageClient $messageSenders[$numberOfSender];
+				$messageIds.Add($messageIdNew);
+			}
 			
 			# Get Message count from the subscriptions
 			$getSubscriptions = New-Object System.Collections.ArrayList;
@@ -89,25 +107,43 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 				$getSubscriptions.Add($sub);
 			}
 			
-			# Act Receive Message
-			$null = Wait-Job -Job $newJobs;
-			$jobResults = Receive-Job $newJobs;
-			
+			##########################################################
 			# Assert
-			$newSBMessage1 | Should Not Be $null;
-			$jobResults.count | Should Be $amountOfReceiver;
+			##########################################################
+			$messageSenders.count | Should Be $amountMessageSender;
+			$newJobs.count | Should Be $amountOfReceiver;
 			
-			# Check subscriptions message count
+			# Check subscriptions message count / every subscription has all messages
 			foreach ($subscription in $getSubscriptions) {
 				$subscription.MessageCount | Should Be $messageAmount;
 			}
 			
-			# Check subscription messageId
-			foreach ($jobResult in $jobResults) {
-				$jobResult.MessageId  | Should Be $newSBMessage1;
-			}
+			# Waite till all jobs are done
+			$null = Wait-Job -Job $newJobs;
 			
+			# Get results (Messages) per Job
+			foreach ($job in $newJobs){
+				$jobResults = Receive-Job $job;
+				
+				# Assert message per receiver
+					# if amount of message is greater than receive cycles then the receiver should have same amount of massages as receive cycles
+					# if amount of message is lesser than receive cycles - receiver should have same amount of messages as amount of send messages
+				if ($receiveCyclesPerReceiver -ge $messageAmount) {
+					($jobResults | where { $_ -ne $null }).count | Should Be $messageAmount;
+				} else {
+					$jobResults.count | Should Be $receiveCyclesPerReceiver;
+				}
+				
+				# Get Message
+				foreach ($resultMessage in ($jobResults | where { $_ -ne $null })) {
+					# Assert MessageId (send and receive)
+					$messageIds -contains $resultMessage.MessageId | Should be $true;
+				}
+			}
+
+			##########################################################
 			# Cleanup
+			##########################################################
 			Remove-Job $newJobs
 		}
 	}
