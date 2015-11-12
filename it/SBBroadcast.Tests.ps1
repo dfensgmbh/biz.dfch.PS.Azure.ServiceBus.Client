@@ -1,4 +1,3 @@
-
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sut = (Split-Path -Leaf $MyInvocation.MyCommand.Path).Replace(".Tests.", ".")
 
@@ -73,10 +72,10 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 
 			for ($i=1; $i -le $amountOfReceiver; $i++){
 				# Arrange Subscriptions
-				$subscriptionName = 'PesterTestSub{1}' -f $i;
+				$subscriptionName = 'PesterTestSub{0}' -f $i;
 				$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
 				$subscriptionPaths.Add($subscriptionPath);
-				New-SBSubscription -TopicPath $topicName -Name $subscriptionsName -LockDuration 300;
+				New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
 				
 				# Arrange Receive Sessions
 				$jobString = '{0} -Path "{1}" -WaitTimeoutSec {2} -Receivemode "{3}"' -f $pathMessageHelper, $subscriptionPaths[$i-1], $WaitTimeoutSec, $receiveMode;
