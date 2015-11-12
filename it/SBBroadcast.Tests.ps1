@@ -70,7 +70,8 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			$newJobs = New-Object System.Collections.ArrayList
 			$subscriptionPaths = New-Object System.Collections.ArrayList;
 
-			for ($i=1; $i -le $amountOfReceiver; $i++){
+			for ($i=1; $i -le $amountOfReceiver; $i++)
+			{
 				# Arrange Subscriptions
 				$subscriptionName = 'PesterTestSub{0}' -f $i;
 				$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
@@ -87,44 +88,42 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			
 			# Arrange MessageSender
 			$messageSenders = New-Object System.Collections.ArrayList;
-			for ($i=1; $i -le $amountMessageSender; $i++) {
+			for ($i=1; $i -le $amountMessageSender; $i++) 
+			{
 				$messageSenderNew = New-SBMessageSender -QueueName $topicName;
 				$messageSenders.Add($messageSenderNew);
 			}
-			
 			##########################################################
 			# Act
 			##########################################################
 			# Send Message
 			$messageIds = New-Object System.Collections.ArrayList;
-			for ($i=1; $i -le $messageAmount; $i++) {
-				if ($amountMessageSender -eq $amountMessageSender) {
+			for ($i=1; $i -le $messageAmount; $i++) 
+			{
+				if ($amountMessageSender -eq $amountMessageSender) 
+				{
 					$numberOfSender = 1;
-				} else {
+				} 
+				else 
+				{
 					$numberOfSender++;
 				}
 				$messageIdNew = New-SBMessage $messageText -QueueName $topicName -MessageClient $messageSenders[$numberOfSender];
 				$messageIds.Add($messageIdNew);
 			}
-			
-			# Get Message count from the subscriptions
-			$getSubscriptions = New-Object System.Collections.ArrayList;
-			# DFTODO - what is this for? 
-			# if I understand this code correctly, "Get-SBSubscriptios" returns a list of subscriptions
-			# so this is already an array. Why do we then loop through it and add its items to an ArrayList?
-			foreach ($sub in Get-SBSubscriptions -TopicPath $topicName ) 
-			{
-				$getSubscriptions.Add($sub);
-			}
-			
 			##########################################################
 			# Assert
 			##########################################################
+			# Get subscriptions
+			$getSubscriptions = Get-SBSubscriptions -TopicPath $topicName
+			
+			$getSubscriptions.count | Should Be $amountOfReceiver;
 			$messageSenders.count | Should Be $amountMessageSender;
 			$newJobs.count | Should Be $amountOfReceiver;
 			
 			# Check subscriptions message count / every subscription has all messages
-			foreach ($subscription in $getSubscriptions) {
+			foreach ($subscription in $getSubscriptions) 
+			{
 				$subscription.MessageCount | Should Be $messageAmount;
 			}
 			
@@ -132,25 +131,29 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			$null = Wait-Job -Job $newJobs;
 			
 			# Get results (Messages) per Job
-			foreach ($job in $newJobs){
+			foreach ($job in $newJobs)
+			{
 				$jobResults = Receive-Job $job;
 				
 				# Assert message per receiver
 					# if amount of message is greater than receive cycles then the receiver should have same amount of massages as receive cycles
 					# if amount of message is lesser than receive cycles - receiver should have same amount of messages as amount of send messages
-				if ($receiveCyclesPerReceiver -ge $messageAmount) {
+				if ($receiveCyclesPerReceiver -ge $messageAmount) 
+				{
 					($jobResults | where { $_ -ne $null }).count | Should Be $messageAmount;
-				} else {
+				} 
+				else 
+				{
 					$jobResults.count | Should Be $receiveCyclesPerReceiver;
 				}
 				
 				# Get Message
-				foreach ($resultMessage in ($jobResults | where { $_ -ne $null })) {
+				foreach ($resultMessage in ($jobResults | where { $_ -ne $null })) 
+				{
 					# Assert MessageId (send and receive)
 					$messageIds -contains $resultMessage.MessageId | Should be $true;
 				}
 			}
-
 			##########################################################
 			# Cleanup
 			##########################################################

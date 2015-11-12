@@ -45,52 +45,101 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 		}
 		
 		It "NewMessages-Singlecast" -Test {
-			# Arrange Subscriptions
+			##########################################################
+			# Arrange
+			##########################################################
+			$pathMessageHelper = "$here\getMessageHelper.ps1"
+
+			# Arrange test parameter
+			$receiveMode = 'PeekLock';
+			$waitTimeoutSec = 5;
+			$amountOfReceiver = 5;
+			$receiveCyclesPerReceiver = 10;
+			$amountMessageSender = 3;
+			$messageAmount = 5;
+			$numberOfSender = 3;
+			$messageText = "TestMessageBroadcast"
+
 			$subscriptionName = 'PesterTestSub';
 			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
+			$subscription = New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
 
-			New-SBSubscription -TopicPath $topicName -Name $subscriptionName;
-			
 			# Arrange MessageReceiver (separate sessions)
-			$receiveMode = 'ReceiveAndDelete';
-			$waitTimeoutSec = 3;
-			$amountOfReceiver = 5;
-			$pathMessageHelper = "$here\getMessageHelper.ps1"
 			$newJobs = New-Object System.Collections.ArrayList
-			
+
 			for ($i=1; $i -le $amountOfReceiver; $i++)
 			{
+				# Arrange Receive Sessions
 				$jobString = '{0} -Path "{1}" -WaitTimeoutSec {2} -Receivemode "{3}"' -f $pathMessageHelper, $subscriptionPath, $WaitTimeoutSec, $receiveMode;
-				$jobString = [Scriptblock]::Create($jobString)
-				$job = Start-Job -ScriptBlock $jobString;
-				$newJobs.Add($job);
+				# $jobString = [Scriptblock]::Create("1..{0} | % {'{1}'}" -f $receiveCyclesPerReceiver, $jobString);
+				$jobString = [Scriptblock]::Create("1.."+$receiveCyclesPerReceiver+" | % {"+$jobString+"}")
+				$jobStart = Start-Job -ScriptBlock $jobString;
+				$newJobs.Add($jobStart);
 			}
 			
 			# Arrange MessageSender
-			$newSender1 = New-SBMessageSender -QueueName $topicName;
-			$newSender2 = New-SBMessageSender -QueueName $topicName;
+			$messageSenders = New-Object System.Collections.ArrayList;
+			for ($i=1; $i -le $amountMessageSender; $i++) 
+			{
+				$messageSenderNew = New-SBMessageSender -QueueName $topicName;
+				$messageSenders.Add($messageSenderNew);
+			}
 			
-			# Arrange Message
-			$messageText1 = "TestMessageSinglecast1"
-			$messageText2 = "TestMessageSinglecast2"
+			##########################################################
+			# Act
+			##########################################################
+			# Send Message
+			$messageIds = New-Object System.Collections.ArrayList;
+			for ($i=1; $i -le $messageAmount; $i++) 
+			{
+				if ($amountMessageSender -eq $amountMessageSender) 
+				{
+					$numberOfSender = 1;
+				} 
+				else 
+				{
+					$numberOfSender++;
+				}
+				$messageIdNew = New-SBMessage $messageText -QueueName $topicName -MessageClient $messageSenders[$numberOfSender];
+				$messageIds.Add($messageIdNew);
+			}
 			
-			# Act Send Message			
-			$newSBMessage1 = New-SBMessage $messageText1 -QueueName $topicName -MessageClient $newSender1;
-			$newSBMessage2 = New-SBMessage $messageText2 -QueueName $topicName -MessageClient $newSender2;
+			##########################################################
+			# Assert
+			##########################################################
+			# Load subscriptions and details
+			$subscriptionLoad = Get-SBSubscriptions -TopicPath $topicName;
+			# It should exist only one subscription
+			($subscriptionLoad).count | Should Be 1;
+			# Messages in Subscription
+			$subscriptionLoad.MessageCount | Should Be $messageAmount;
 			
-			# Act Receive Message
+			$messageSenders.count | Should Be $amountMessageSender;
+			$newJobs.count | Should Be $amountOfReceiver;
+			
+			# Waite till all jobs are done
 			$null = Wait-Job -Job $newJobs;
 			$jobResults = Receive-Job $newJobs;
 			
-			# Assert			
-			($jobResults | where { $_ -ne $null }).Count | Should Be 2;
-			$newSBMessage1 | Should Not Be $null;
-			$newSBMessage2 | Should Not Be $null;
-			$jobResults.MessageId -contains $newSBMessage1 | Should Be $true;
-			$jobResults.MessageId -contains $newSBMessage2 | Should Be $true;
+			# Check - Receive right messages
+			foreach($jobResult in $jobResults | where { $_ -ne $null }){
+				$messageIds -contains $jobResult.MessageId | Should be $true;
+			}
 			
+			# Check all messages received
+			if ($amountMessageSender*$receiveCyclesPerReceiver -ge $messageAmount) 
+			{
+				($jobResults | where { $_ -ne $null }).count | Should Be $messageAmount;
+			} 
+			else 
+			{
+				$jobResults.count| Should Be $amountMessageSender*$receiveCyclesPerReceiver;
+			}
+			
+			##########################################################
 			# Cleanup
-			Remove-Job $newJobs
+			##########################################################
+			Remove-Job $newJobs;
 		}
 	}
 }

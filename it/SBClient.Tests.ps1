@@ -8,25 +8,145 @@ function Stop-Pester($message = "EMERGENCY: Script cannot continue.")
 	$PSCmdlet.ThrowTerminatingError($e);
 }
 
-Describe -Tags "SBClient.Tests" "SBClient.Tests" {
+Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 
 	Mock Export-ModuleMember { return $null; }
 	
-	Context "SBQueue.Tests" {
+	. "$here\$sut"
+	
+	Context "SBClientSimple.Tests" {
 		
 		BeforeEach {
-			$moduleName = 'biz.dfch.PS.Azure.ServiceBus.Client';
-			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
-			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Client -ErrorAction:SilentlyContinue;
-			Import-Module $moduleName -ErrorAction:SilentlyContinue;
-			
+			# Management module for service bus - required to create, check and delete queues/topis/subscriptions
 			$moduleName = 'biz.dfch.PS.Azure.ServiceBus.Setup';
 			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
-			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Setup -ErrorAction:SilentlyContinue;
-			Import-Module $moduleName -ErrorAction:SilentlyContinue;
+			Import-Module $moduleName;
+			
+			# Set Modulname
+			$moduleName = "biz.dfch.PS.Azure.ServiceBus.Client"
+			
+			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
+			# Import Modul from git repo
+			Import-Module "$here\..\src\$moduleName.psd1" -Force
+			# Set variable to the loacal environment
+			$biz_dfch_PS_Azure_ServiceBus_Client.EndpointServerName = (Get-SBFarm).Hosts[0].Name;
+			$biz_dfch_PS_Azure_ServiceBus_Client.DefaultNameSpace = (Get-SBNamespace).Name;
+			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKeyName = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.DefaultNameSpace -Name RootManageSharedAccessKey).KeyName;
+			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.DefaultNameSpace -Name RootManageSharedAccessKey).PrimaryKey;
+			
+			# Create Topic
+			$topicName = "PesterTestTopic";
+			New-SBTopic -Path $topicName;
+			
+			$enterSBServer = Enter-SBServer;
 		}
 		
-		It "SBClient-Name" -Test {
+		AfterEach {
+			#Cleanup
+			Remove-SBTopic -Path $topicName -force;
+		}
+		
+		It "SBClientSimple-NamespaceIsAviable" {
+			# Arrange
+			$absoluteUri = "sb://"+$biz_dfch_PS_Azure_ServiceBus_Client.EndpointServerName+":9354/"+$biz_dfch_PS_Azure_ServiceBus_Client.DefaultNameSpace;
+			
+			# Act
+			
+			# Assert
+			$enterSBServer.Address.AbsoluteUri | Should Be $absoluteUri; #sb://win-8a036g6jvpj:9354/ServiceBusDefaultNamespace"
+		}
+		
+		It "SBClientSimple-CreateMessageIncreaseSubscriptionMessageCount" -Test {
+			# Arrange
+			$messageText = 'Pester-Test-Message';
+			$subscriptionName = 'PesterTestSub';
+			
+			# Arrange test parameter
+			$receiveMode = 'PeekLock';
+			$amountMessageSender = 2;
+			$messageAmount = 6;
+			
+			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
+			$subscriptionNew = New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
+			
+			$messageSenders = New-Object System.Collections.ArrayList;
+			for ($i=1; $i -le $amountMessageSender; $i++) 
+			{
+				$messageSenderNew = New-SBMessageSender -QueueName $topicName;
+				$messageSenders.Add($messageSenderNew);
+			}
+
+			# Act Send Message
+			$messageIds = New-Object System.Collections.ArrayList;
+			for ($i=1; $i -le $messageAmount; $i++) 
+			{
+				if ($amountMessageSender -eq $amountMessageSender) 
+				{
+					$numberOfSender = 1;
+				} 
+				else 
+				{
+					$numberOfSender++;
+				}
+				$messageIdNew = New-SBMessage $messageText -QueueName $topicName -MessageClient $messageSenders[$numberOfSender];
+				$messageIds.Add($messageIdNew);
+			}
+			
+			$subscription = Get-SBSubscriptions -TopicPath $topicName;
+			
+			# Assert
+			$subscription.MessageCount | Should Be $messageAmount;
+		}
+		
+		It "SBClientSimple-GetSimpleMessage" -Test {
+			# Arrange
+			$messageText = 'Pester-Test-Message';
+			
+			# Act			
+			$newSBMessage = New-SBMessage $messageText -QueueName $topicName;
+			
+			# Assert 
+			write-host "MessageId " $newSBMessage;
+			$newSBMessage | Should Not Be $null;
+			$getSBMessage = Get-SBMessage -BodyAsProperty -QueueName $topicName -ReceiveMode 'ReceiveAndDelete';
+			write-host $getSBMessage;
+			write-host $getSBMessage.MessageId;
+			$getSBMessage.MessageId | Should Be $newSBMessage;
+		}
+		
+		It "SBClientSimple-GetMessagePeekLockMessageIsStillInSubscription" -Test {
+			# Arrange
+			$messageText = 'Pester-Test-Message';
+			
+			# Act			
+			$newSBMessage = New-SBMessage $messageText -QueueName $topicName;
+			
+			# Assert 
+			$getSBMessage = Get-SBMessage -BodyAsProperty -QueueName $queueName -ReceiveMode 'PeekLock';
+			$newSBMessage | Should Not Be $null;
+			$getSBMessage.Properties['Body'] | Should Be $messageText;
+			
+			$subscription = Get-SBSubscriptions -TopicPath $topicName;
+			$subscription.MessageCount | Should Be 1;
+		}
+		
+		It "SBClientSimple-GetMessageReceiveAndDeleteSubscriptionIsEmpty" -Test {
+			# Arrange
+			$messageText = 'Pester-Test-Message';
+			
+			# Act			
+			$newSBMessage = New-SBMessage $messageText -QueueName $topicName;
+			
+			# Assert 
+			$getSBMessage = Get-SBMessage -BodyAsProperty -QueueName $queueName -ReceiveMode 'ReceiveAndDelete';
+			$newSBMessage | Should Not Be $null;
+			$getSBMessage.Properties['Body'] | Should Be $messageText;
+			
+			$subscription = Get-SBSubscriptions -TopicPath $topicName;
+			$subscription.MessageCount | Should Be 0;
+		}
+		
+		It "SBClient-Create" -Test {
 			# Arrange
 			
 			# Act
