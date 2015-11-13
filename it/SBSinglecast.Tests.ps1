@@ -15,28 +15,31 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 	Context "SBClientSinglecast.Tests" {
 		
 		BeforeEach {		
-			# Management module for service bus - required to create, check and delete queues/topis/subscriptions
-			$moduleName = 'biz.dfch.PS.Azure.ServiceBus.Setup';
+			# Import management module for service bus - required to create, check and delete queues/topis/subscriptions
+			$moduleName = 'biz.dfch.PS.Azure.ServiceBus.Management';
 			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
-			Import-Module $moduleName;
+			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Management -ErrorAction:SilentlyContinue;
+			Import-Module $moduleName -ErrorAction:SilentlyContinue;
 			
-			# Set Modulname
-			$moduleName = "biz.dfch.PS.Azure.ServiceBus.Client"
-			
+			# Import client module for service bus - required to send and receive messages
+			$moduleName = "biz.dfch.PS.Azure.ServiceBus.Client";			
 			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
-			# Import Modul from git repo
-			Import-Module "$here\..\src\$moduleName.psd1" -Force
+			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Client -ErrorAction:SilentlyContinue;
+			Import-Module $moduleName -ErrorAction:SilentlyContinue -Force;
+			
 			# Set variable to the loacal environment
 			$biz_dfch_PS_Azure_ServiceBus_Client.EndpointServerName = (Get-SBFarm).Hosts[0].Name;
 			$biz_dfch_PS_Azure_ServiceBus_Client.NameSpace = (Get-SBNamespace).Name;
-			$biz_dfch_PS_Azure_ServiceBus_Setup.DefaultNameSpace = $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace;
+			$biz_dfch_PS_Azure_ServiceBus_Management.DefaultNameSpace = $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace;
 			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKeyName = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).KeyName;
 			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).PrimaryKey;
 			
 			# Create Topic
-			$topicName = "PesterTestTopic";
+			$guid = [guid]::NewGuid().Guid;
+			$topicName = "Pester-{0}" -f $guid;
 			New-SBTopic -Path $topicName;
 			
+			# Enter Servicebus
 			$enterSBServer = Enter-SBServer;
 		}
 		
@@ -46,6 +49,19 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 		}
 		
 		It "SBClientSinglecast-SendAndOneRecipientReceiveMessages" -Test {
+			<#
+				GIVEN there are multiple senders S1 and S2
+				  AND there is a message sink MS1
+				  AND this sink is in *SINGLECAST* mode
+				  AND there are multiple receivers R1, R2, R3 acknowledging message receipt
+				  AND the receive mode is *receive and delete*
+				WHEN S1 sends messages M10, M11, M14
+				  AND S2 send messages M12, M13, M15
+				  AND the number of the messages indicates the sequence in which they are sent
+				THEN every message is delivered exactly one time to one of the receivers
+				  AND the sink contains no messages
+			#>
+		
 			##########################################################
 			# Arrange
 			##########################################################
@@ -130,7 +146,6 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 				$messageIds -contains $jobResult.MessageId | Should be $true;
 			}
 			
-			$jobResults
 			# Check all messages received
 			if ($amountMessageSender*$receiveCyclesPerReceiver -ge $messageAmount) 
 			{

@@ -16,30 +16,28 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 	
 	Context "SBClientBroadcast.Tests" {
 		BeforeEach {		
-			# Management module for service bus - required to create, check and delete queues/topis/subscriptions
-			$moduleName = 'biz.dfch.PS.Azure.ServiceBus.Setup';
+			# Import management module for service bus - required to create, check and delete queues/topis/subscriptions
+			$moduleName = 'biz.dfch.PS.Azure.ServiceBus.Management';
 			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
-			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Setup -ErrorAction:SilentlyContinue;
+			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Management -ErrorAction:SilentlyContinue;
 			Import-Module $moduleName -ErrorAction:SilentlyContinue;
 			
-			# Set Modulname
-			$moduleName = "biz.dfch.PS.Azure.ServiceBus.Client"
-			
-			# Remove Module if it is imported
-
+			# Import client module for service bus - required to send and receive messages
+			$moduleName = "biz.dfch.PS.Azure.ServiceBus.Client";			
 			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
 			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Client -ErrorAction:SilentlyContinue;
-			Import-Module "$here\..\src\$moduleName.psd1"  -ErrorAction:SilentlyContinue -Force;
+			Import-Module $moduleName -ErrorAction:SilentlyContinue -Force;
 			
 			# Set variable to the loacal environment
 			$biz_dfch_PS_Azure_ServiceBus_Client.EndpointServerName = (Get-SBFarm).Hosts[0].Name;
 			$biz_dfch_PS_Azure_ServiceBus_Client.NameSpace = (Get-SBNamespace).Name;
-			$biz_dfch_PS_Azure_ServiceBus_Setup.DefaultNameSpace = $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace;
+			$biz_dfch_PS_Azure_ServiceBus_Management.DefaultNameSpace = $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace;
 			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKeyName = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).KeyName;
 			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).PrimaryKey;
 			
 			# Create Topic
-			$topicName = "PesterTestTopic";
+			$guid = [guid]::NewGuid().Guid;
+			$topicName = "Pester-{0}" -f $guid;
 			New-SBTopic -Path $topicName;
 			
 			# Enter Servicebus
