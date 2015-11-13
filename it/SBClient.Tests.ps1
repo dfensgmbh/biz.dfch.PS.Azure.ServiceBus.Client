@@ -24,20 +24,19 @@ Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 			
 			# Set Modulname
 			$moduleName = "biz.dfch.PS.Azure.ServiceBus.Client"
+			$topicName = "PesterTestTopic";
 			
 			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
 			# Import Modul from git repo
 			Import-Module "$here\..\src\$moduleName.psd1" -Force
 			# Set variable to the loacal environment
 			$biz_dfch_PS_Azure_ServiceBus_Client.EndpointServerName = (Get-SBFarm).Hosts[0].Name;
-			$biz_dfch_PS_Azure_ServiceBus_Client.DefaultNameSpace = (Get-SBNamespace).Name;
-			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKeyName = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.DefaultNameSpace -Name RootManageSharedAccessKey).KeyName;
-			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.DefaultNameSpace -Name RootManageSharedAccessKey).PrimaryKey;
+			$biz_dfch_PS_Azure_ServiceBus_Client.NameSpace = (Get-SBNamespace).Name;
+			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKeyName = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).KeyName;
+			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).PrimaryKey;
 			
 			# Create Topic
-			$topicName = "PesterTestTopic";
 			New-SBTopic -Path $topicName;
-			
 			$enterSBServer = Enter-SBServer;
 		}
 		
@@ -48,12 +47,12 @@ Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 		
 		It "SBClientSimple-NamespaceIsAviable" {
 			# Arrange
-			$absoluteUri = "sb://"+$biz_dfch_PS_Azure_ServiceBus_Client.EndpointServerName+":9354/"+$biz_dfch_PS_Azure_ServiceBus_Client.DefaultNameSpace;
+			$absoluteUri = "sb://"+$biz_dfch_PS_Azure_ServiceBus_Client.EndpointServerName+":5671/"+$biz_dfch_PS_Azure_ServiceBus_Client.NameSpace;
 			
 			# Act
 			
 			# Assert
-			$enterSBServer.Address.AbsoluteUri | Should Be $absoluteUri; #sb://win-8a036g6jvpj:9354/ServiceBusDefaultNamespace"
+			$enterSBServer.Address.AbsoluteUri | Should Be $absoluteUri; #sb://win-8a036g6jvpj:5671/ServiceBusDefaultNamespace"
 		}
 		
 		It "SBClientSimple-CreateMessageIncreaseSubscriptionMessageCount" -Test {
@@ -98,19 +97,19 @@ Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 			$subscription.MessageCount | Should Be $messageAmount;
 		}
 		
-		It "SBClientSimple-GetSimpleMessage" -Test {
+		It "SBClientSimple-GetSimplyMessage" -Test {
 			# Arrange
 			$messageText = 'Pester-Test-Message';
 			
+			$subscriptionName = 'PesterTestSub';
+			$subscriptionNew = New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
+			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
 			# Act			
 			$newSBMessage = New-SBMessage $messageText -QueueName $topicName;
+			$getSBMessage = Get-SBMessage -BodyAsProperty -QueueName $subscriptionPath -ReceiveMode 'ReceiveAndDelete';
 			
 			# Assert 
-			write-host "MessageId " $newSBMessage;
 			$newSBMessage | Should Not Be $null;
-			$getSBMessage = Get-SBMessage -BodyAsProperty -QueueName $topicName -ReceiveMode 'ReceiveAndDelete';
-			write-host $getSBMessage;
-			write-host $getSBMessage.MessageId;
 			$getSBMessage.MessageId | Should Be $newSBMessage;
 		}
 		

@@ -20,9 +20,9 @@ Param
 Import-Module C:\development\projects\GitHub\biz.dfch.PS.Azure.ServiceBus.Client\src\biz.dfch.PS.Azure.ServiceBus.Client.psd1;
 
 $biz_dfch_PS_Azure_ServiceBus_Client.EndpointServerName = (Get-SBFarm).Hosts[0].Name;
-$biz_dfch_PS_Azure_ServiceBus_Client.DefaultNameSpace = (Get-SBNamespace).Name;
-$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKeyName = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.DefaultNameSpace -Name RootManageSharedAccessKey).KeyName;
-$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.DefaultNameSpace -Name RootManageSharedAccessKey).PrimaryKey;
-$biz_dfch_PS_Azure_ServiceBus_Client.MessageFactory = Enter-SBServer;
+$biz_dfch_PS_Azure_ServiceBus_Client.NameSpace = (Get-SBNamespace).Name;
+$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKeyName = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).KeyName;
+$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).PrimaryKey;
+$biz_dfch_PS_Azure_ServiceBus_Client.Factory = Enter-SBServer;
 
 Get-SBMessage -QueueName $Path -Receivemode $Receivemode -WaitTimeoutSec $WaitTimeoutSec -BodyAsProperty;
