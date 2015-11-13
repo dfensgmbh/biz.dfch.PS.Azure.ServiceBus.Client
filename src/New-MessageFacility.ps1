@@ -1,4 +1,4 @@
-﻿function New-MessageSubscription {
+﻿function New-MessageFacility {
 <#
     .SYNOPSIS
     This script can be used to delete a subscription from a topic.
@@ -6,7 +6,7 @@
     .DESCRIPTION
     This script can be used to delete a subscription from a topic.
 
-    .PARAMETER  TopicPath
+    .PARAMETER  Path
     Specifies the path of the topic that this subscription description belongs to.
     
     .PARAMETER  Name
@@ -58,9 +58,9 @@ Param(
 	[Parameter(Mandatory = $false, Position = 6)]
 	[int] $ManagementPort = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).ManagementPort
 	, 
-	# [Required] TopicPath
+	# [Required] Path of a Topic or Queue
     [Parameter(Mandatory = $true)]
-    [String] $TopicPath
+    [String] $Path
 	,
 	# [Required] Subscription name
     [Parameter(Mandatory = $true)]
@@ -83,7 +83,7 @@ BEGIN
 {
 	$datBegin = [datetime]::Now;
 	[string] $fn = $MyInvocation.MyCommand.Name;
-	Log-Debug $fn ("CALL. EndpointServerName '{0}'; RuntimePort '{1}'; Namespace '{2}'; TopicPath '{3}'; Subscription '{4}'" -f $EndpointServerName, $RuntimePort, $Namespace, $TopicPath, $Name) -fac 1;
+	Log-Debug $fn ("CALL. EndpointServerName '{0}'; RuntimePort '{1}'; Namespace '{2}'; Path '{3}'; Subscription '{4}'" -f $EndpointServerName, $RuntimePort, $Namespace, $Path, $Name) -fac 1;
 	
 	$PSDefaultParameterValues.'Log-Debug:fn' = $fn;
 	$PSDefaultParameterValues.'Log-Info:fn' = $fn;
@@ -122,9 +122,9 @@ try
 	# Check if the topic exists
 	try
 	{
-		if (!$NamespaceManager.TopicExists($TopicPath))
+		if (!$NamespaceManager.TopicExists($Path))
 		{
-			$msg = "NamespaceManager: The [$TopicPath] topic does not exit in the [$Namespace] namespace.";
+			$msg = "NamespaceManager: The [$Path] topic does not exit in the [$Namespace] namespace.";
 			Log-Error -msg $msg;
 			$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $NamespaceManager;
 			$PSCmdlet.ThrowTerminatingError($e);
@@ -132,56 +132,34 @@ try
 	}
 	catch
 	{
-		$msg = $_.Exception.Message;
-		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $NamespaceManager;
-		Log-Error -msg $msg;
-		$PSCmdlet.ThrowTerminatingError($e);
+		if (!$NamespaceManager.QueueExists($Path))
+		{
+			$OutputParameter = $NamespaceManager.GetQueue($Path);
+		}
+		else
+		{
+			$msg = $_.Exception.Message;
+			$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $NamespaceManager;
+			Log-Error -msg $msg;
+			$PSCmdlet.ThrowTerminatingError($e);
+		}
 	}
 
 	# Check if the subscription exists
-	if ($NamespaceManager.SubscriptionExists($TopicPath, $Name))
+	if ( $OutputParameter -ne $null ) 
 	{
-		$OutputParameter = $NamespaceManager.GetSubscription($TopicPath, $Name);
-	}
-	else
-	{
-		$SubscriptionDescription = New-Object -TypeName Microsoft.ServiceBus.Messaging.SubscriptionDescription -ArgumentList $TopicPath, $Name;
-		$SubscriptionDescription.AutoDeleteOnIdle = [System.TimeSpan]::FromMinutes($AutoDeleteOnIdle);
-		$SubscriptionDescription.DefaultMessageTimeToLive = [System.TimeSpan]::FromMinutes($DefaultMessageTimeToLive);
-		$OutputParameter = $NamespaceManager.CreateSubscription($SubscriptionDescription);
-		<#
-		if ($AutoDeleteOnIdle -ge 5)
+		if ($NamespaceManager.SubscriptionExists($Path, $Name))
 		{
-			$SubscriptionDescription.AutoDeleteOnIdle = [System.TimeSpan]::FromMinutes(10);
+			$OutputParameter = $NamespaceManager.GetSubscription($Path, $Name);
 		}
-		if ($DefaultMessageTimeToLive -gt 0)
+		else
 		{
+			$SubscriptionDescription = New-Object -TypeName Microsoft.ServiceBus.Messaging.SubscriptionDescription -ArgumentList $Path, $Name;
+			$SubscriptionDescription.AutoDeleteOnIdle = [System.TimeSpan]::FromMinutes($AutoDeleteOnIdle);
 			$SubscriptionDescription.DefaultMessageTimeToLive = [System.TimeSpan]::FromMinutes($DefaultMessageTimeToLive);
-		}
-		$SubscriptionDescription.EnableBatchedOperations = $EnableBatchedOperations;
-		$SubscriptionDescription.EnableDeadLetteringOnFilterEvaluationExceptions = $EnableDeadLetteringOnFilterEvaluationExceptions;
-		$SubscriptionDescription.EnableDeadLetteringOnMessageExpiration = $EnableDeadLetteringOnMessageExpiration;
-		$SubscriptionDescription.ForwardTo = $ForwardTo;
-		if ($LockDuration -gt 0)
-		{
-			$SubscriptionDescription.LockDuration = [System.TimeSpan]::FromSeconds($LockDuration);
-		}
-		$SubscriptionDescription.MaxDeliveryCount = $MaxDeliveryCount;
-		$SubscriptionDescription.RequiresSession = $RequiresSession;
-		$SubscriptionDescription.UserMetadata = $UserMetadata;
-		
-		if ( $SqlRuleAction ) {
-			$SqlFilterObject = New-Object -TypeName Microsoft.ServiceBus.Messaging.SqlFilter -ArgumentList $SqlFilter;
-			$SqlRuleActionObject = New-Object -TypeName Microsoft.ServiceBus.Messaging.SqlRuleAction -ArgumentList $SqlRuleAction;
-			$RuleDescription = New-Object -TypeName Microsoft.ServiceBus.Messaging.RuleDescription;
-			$RuleDescription.Filter = $SqlFilterObject;
-			$RuleDescription.Action = $SqlRuleActionObject;
-			$OutputParameter = $NamespaceManager.CreateSubscription($SubscriptionDescription, $RuleDescription);
-		} else {
 			$OutputParameter = $NamespaceManager.CreateSubscription($SubscriptionDescription);
+			Log-Info -msg "The [$Name] subscription for the [$Path] topic has been successfully created.";
 		}
-		#>
-		Log-Info -msg "The [$Name] subscription for the [$TopicPath] topic has been successfully created.";
 	}
 	$fReturn = $true;
 
@@ -248,7 +226,7 @@ return $OutputParameter;
 
 } # function
 
-if($MyInvocation.ScriptName) { Export-ModuleMember -function New-MessageSubscription; }
+if($MyInvocation.ScriptName) { Export-ModuleMember -function New-MessageFacility; }
 
 # 
 # Copyright 2014-2015 d-fens GmbH

@@ -90,7 +90,7 @@ NestedModules = @(
 	,
 	'Get-MessageSender.ps1'
 	,
-	'New-MessageSubscription.ps1'
+	'New-MessageFacility.ps1'
 )
 
 # Functions to export from this module

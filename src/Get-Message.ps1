@@ -302,7 +302,7 @@ try
 	# Check facility
 	if ( $EnsureFacility ) 
 	{
-		$TopicPath = ($Facility -Split "\\Subscriptions\\")[0];
+		$Path = ($Facility -Split "\\Subscriptions\\")[0];
 		$SubscriptionName = "RECV-{0}" -f (get-wmiobject Win32_ComputerSystemProduct  | Select-Object -ExpandProperty UUID).toString();
 		if ( $Facility -match "\\Subscriptions\\" )
 		{
@@ -310,8 +310,8 @@ try
 		}
 		try 
 		{
-			$FacilitiyExists = New-MessageSubscription -TopicPath $TopicPath -Name $SubscriptionName;
-			$Facility = '{0}\Subscriptions\{1}' -f $TopicPath, $SubscriptionName;
+			$FacilitiyExists = New-MessageFacility -Path $Path -Name $SubscriptionName;
+			$Facility = '{0}\Subscriptions\{1}' -f $Path, $SubscriptionName;
 		} catch {
 			$msg = $_.Exception.Message;
 			Log-Error -msg $msg;
