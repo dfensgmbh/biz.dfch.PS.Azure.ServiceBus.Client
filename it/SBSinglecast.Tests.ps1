@@ -45,7 +45,7 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 			Remove-SBTopic -Path $topicName -force;
 		}
 		
-		It "SBClientSinglecast-SendAndReceiveMessages" -Test {
+		It "SBClientSinglecast-SendAndOneRecipientReceiveMessages" -Test {
 			##########################################################
 			# Arrange
 			##########################################################
@@ -151,7 +151,7 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 			Remove-Job $newJobs;
 		}
 		
-		It "SBClientSinglecast-SendAndLockMessages" -Test {
+		It "SBClientSinglecast-SendAndOneRecipientLockMessages" -Test {
 			<# 
 				GIVEN there are multiple senders S1 and S2
 				  AND there is a message sink MS1
@@ -184,7 +184,7 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 
 		}
 		
-		It "SBClientSinglecast-SendAndCompleteMessages" -Test {
+		It "SBClientSinglecast-SendAndOneRecipientCompleteMessages" -Test {
 			<# 
 				GIVEN there are multiple senders S1 and S2
 				  AND there is a message sink MS1

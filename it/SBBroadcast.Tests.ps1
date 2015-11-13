@@ -51,7 +51,7 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			Remove-SBTopic -Path $topicName -force;
 		}
 				
-		It "SBClientBroadcast-SendAndLockMessages" -Test {
+		It "SBClientBroadcast-SendAndAllRecipientsLockMessages" -Test {
 			##########################################################
 			# Arrange
 			##########################################################
@@ -162,7 +162,7 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			Remove-Job $newJobs;
 		}
 		
-		It "SBClientBroadcast-SendAndReceiveMessages" -Test {
+		It "SBClientBroadcast-SendAndAllRecipientsReceiveMessages" -Test {
 			<# 
 				GIVEN there are multiple senders S1 and S2
 				  AND there is a message sink MS1
