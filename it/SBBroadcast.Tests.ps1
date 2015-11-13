@@ -34,6 +34,7 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			# Set variable to the loacal environment
 			$biz_dfch_PS_Azure_ServiceBus_Client.EndpointServerName = (Get-SBFarm).Hosts[0].Name;
 			$biz_dfch_PS_Azure_ServiceBus_Client.NameSpace = (Get-SBNamespace).Name;
+			$biz_dfch_PS_Azure_ServiceBus_Setup.DefaultNameSpace = $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace;
 			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKeyName = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).KeyName;
 			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).PrimaryKey;
 			
@@ -69,11 +70,12 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			# Arrange MessageReceiver (separate sessions)
 			$newJobs = New-Object System.Collections.ArrayList
 			$subscriptionPaths = New-Object System.Collections.ArrayList;
+			$guid = [guid]::NewGuid().Guid;
 
 			for ($i=1; $i -le $amountOfReceiver; $i++)
 			{
 				# Arrange Subscriptions
-				$subscriptionName = 'PesterTestSub{0}' -f $i;
+				$subscriptionName = 'Pester-{0}-{1}' -f $guid, $i;
 				$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
 				$subscriptionPaths.Add($subscriptionPath);
 				New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
@@ -90,7 +92,7 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			$messageSenders = New-Object System.Collections.ArrayList;
 			for ($i=1; $i -le $amountMessageSender; $i++) 
 			{
-				$messageSenderNew = New-SBMessageSender -QueueName $topicName;
+				$messageSenderNew = Get-SBMessageSender -Facility $topicName;
 				$messageSenders.Add($messageSenderNew);
 			}
 			##########################################################
@@ -108,7 +110,7 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 				{
 					$numberOfSender++;
 				}
-				$messageIdNew = New-SBMessage $messageText -QueueName $topicName -MessageClient $messageSenders[$numberOfSender];
+				$messageIdNew = New-SBMessage $messageText -Facility $topicName -MessageClient $messageSenders[$numberOfSender];
 				$messageIds.Add($messageIdNew);
 			}
 			##########################################################

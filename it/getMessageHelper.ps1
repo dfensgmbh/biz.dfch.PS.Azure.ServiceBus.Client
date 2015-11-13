@@ -25,4 +25,4 @@ $biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKeyName = (Get-SBAuthorizationR
 $biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).PrimaryKey;
 $biz_dfch_PS_Azure_ServiceBus_Client.Factory = Enter-SBServer;
 
-Get-SBMessage -QueueName $Path -Receivemode $Receivemode -WaitTimeoutSec $WaitTimeoutSec -BodyAsProperty;
+Get-SBMessage -Facility $Path -Receivemode $Receivemode -WaitTimeoutSec $WaitTimeoutSec -BodyAsProperty;
