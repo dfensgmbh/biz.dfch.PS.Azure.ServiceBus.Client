@@ -176,20 +176,94 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 				  AND S2 send messages M12, M13, M15
 				  AND the number of the messages indicates the sequence in which they are sent
 				THEN every message is delivered exactly one time to each of the receivers
+		It "SBClientBroadcast-SendMessagesAndAllRecipientsSubscribe" -Test {
+			<# 
+				GIVEN there are multiple senders S1 and S2
+				  AND there is a message sink MS1
+				  AND this sink is in *BROADCAST* mode
+				  AND this sink has multiple subscription SUB1, SUB2, SUB3
+				  AND there are multiple receivers R1, R2, R3
+				WHEN R1 subscript to SUB1
+				  AND R2 subscript to SUB2
+				  AND R3 subscribe to SUB3
+				  AND S1 sends messages M10, M11, M14
+				  AND S2 send messages M12, M13, M15
+				  AND the number of the messages indicates the sequence in which they are sent
+				THEN every message is delivered exactly one time to each of the receivers
 				  AND it the receivers do not acknowledge message receipt
 			#>
 		
 			##########################################################
 			# Arrange
 			##########################################################
+			$pathMessageHelper = "$here\getMessageHelper.ps1"
+
+			# Arrange test parameter
+			$receiveMode = 'ReceiveAndDelete';
+			$waitTimeoutSec = 10;
+			$amountOfReceiver = 3;
+			$receiveCyclesPerReceiver = 10;
+			$amountMessageSender = 2;
+			$messageAmount = 5;
+			$numberOfSender = 3;
+			$messageText = "TestMessageBroadcast"
 			
+			# Arrange MessageReceiver (separate sessions)
+			$subscriptionPaths = New-Object System.Collections.ArrayList;
+			$guid = [guid]::NewGuid().Guid;
+
+			for ($i=1; $i -le $amountOfReceiver; $i++)
+			{
+				# Arrange Subscriptions
+				$subscriptionName = 'Pester-{0}-{1}' -f $guid, $i;
+				$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
+				$subscriptionPaths.Add($subscriptionPath);
+				New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
+			}
+			
+			# Arrange MessageSender
+			$messageSenders = New-Object System.Collections.ArrayList;
+			for ($i=1; $i -le $amountMessageSender; $i++) 
+			{
+				$messageSenderNew = Get-SBMessageSender -Facility $topicName;
+				$messageSenders.Add($messageSenderNew);
+			}
 			##########################################################
 			# Act
 			##########################################################
+			# Send Message
+			$messageIds = New-Object System.Collections.ArrayList;
+			for ($i=1; $i -le $messageAmount; $i++) 
+			{
+				if ($amountMessageSender -eq $amountMessageSender) 
+				{
+					$numberOfSender = 1;
+				} 
+				else 
+				{
+					$numberOfSender++;
+				}
+				$messageIdNew = New-SBMessage $messageText -Facility $topicName -MessageClient $messageSenders[$numberOfSender];
+				$messageIds.Add($messageIdNew);
+			}
 			
+			# Get subscribtion after send
+			$getSubscriptions = Get-SBSubscriptions -TopicPath $topicName;
+			
+
 			##########################################################
 			# Assert
 			##########################################################
+			
+			# Assert subscriptions			
+			$getSubscriptions.count | Should Be $amountOfReceiver;
+			$messageSenders.count | Should Be $amountMessageSender;
+			
+			# Check subscriptions message count / every subscription has all messages
+			foreach ($subscription in $getSubscriptions) 
+			{
+				$subscription.MessageCount | Should Be $messageAmount;
+			}
 			
 			##########################################################
 			# Cleanup
