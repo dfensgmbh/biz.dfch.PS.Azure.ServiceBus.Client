@@ -51,7 +51,7 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			Remove-SBTopic -Path $topicName -force;
 		}
 				
-		It "NewMessages-Broadcast" -Test {
+		It "SBClientBroadcast-SendAndLockMessages" -Test {
 			##########################################################
 			# Arrange
 			##########################################################
@@ -160,6 +160,69 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			# Cleanup
 			##########################################################
 			Remove-Job $newJobs;
+		}
+		
+		It "SBClientBroadcast-SendAndReceiveMessages" -Test {
+			<# 
+				GIVEN there are multiple senders S1 and S2
+				  AND there is a message sink MS1
+				  AND this sink is in *BROADCAST* mode
+				  AND this sink has multiple subscription SUB1, SUB2, SUB3
+				  AND there are multiple receivers R1, R2, R3
+				WHEN R1 subscript to SUB1
+				  AND R2 subscript to SUB2
+				  AND R3 subscribe to SUB3
+				  AND S1 sends messages M10, M11, M14
+				  AND S2 send messages M12, M13, M15
+				  AND the number of the messages indicates the sequence in which they are sent
+				THEN every message is delivered exactly one time to each of the receivers
+				  AND it the receivers do not acknowledge message receipt
+			#>
+		
+			##########################################################
+			# Arrange
+			##########################################################
+			
+			##########################################################
+			# Act
+			##########################################################
+			
+			##########################################################
+			# Assert
+			##########################################################
+			
+			##########################################################
+			# Cleanup
+			##########################################################
+
+		}
+		
+		It "SBClientBroadcast-SendToSubscriptionFail" -Test {
+			<# 
+				GIVEN there is a sink MS1
+				  AND this sink is in *BROADCAST* mode
+				  AND this sink has a subscription SUB1
+				  AND there is a sender S1
+				WHEN S1 send a message to subscription SUB1
+				THEN S1 get an exception
+			#>
+		
+			##########################################################
+			# Arrange
+			##########################################################
+			
+			##########################################################
+			# Act
+			##########################################################
+			
+			##########################################################
+			# Assert
+			##########################################################
+			
+			##########################################################
+			# Cleanup
+			##########################################################
+
 		}
 	}
 }

@@ -150,6 +150,76 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 			##########################################################
 			Remove-Job $newJobs;
 		}
+		
+		It "SBClientSinglecast-SendAndLockMessages" -Test {
+			<# 
+				GIVEN there are multiple senders S1 and S2
+				  AND there is a message sink MS1
+				  AND this sink is in *SINGLECAST* mode
+				  AND there are multiple receivers R1, R2, R3 acknowledging message receipt
+				  AND the receive mode is *receive and lock*
+				WHEN S1 sends messages M10, M11, M14
+				  AND S2 send messages M12, M13, M15
+				  AND the number of the messages indicates the sequence in which they are sent
+				THEN every message is delivered exactly one time to one of the receivers
+				  AND the sink contains 6 messages
+				  AND this messages are locked
+			#>
+		
+			##########################################################
+			# Arrange
+			##########################################################
+			
+			##########################################################
+			# Act
+			##########################################################
+			
+			##########################################################
+			# Assert
+			##########################################################
+			
+			##########################################################
+			# Cleanup
+			##########################################################
+
+		}
+		
+		It "SBClientSinglecast-SendAndCompleteMessages" -Test {
+			<# 
+				GIVEN there are multiple senders S1 and S2
+				  AND there is a message sink MS1
+				  AND this sink is in *SINGLECAST* mode
+				  AND there are multiple receivers R1, R2, R3 acknowledging message receipt
+				  AND the receive mode is *receive and lock*
+				  AND the lock duration is 20 seconds
+				WHEN S1 sends messages M10
+				  AND S2 send messages M11
+				  AND the number of the messages indicates the sequence in which they are sent
+				THEN every message is delivered exactly one time to one of the receivers
+				  AND the sink contains 2 messages
+				  AND this messages are locked
+				WHEN the receivers from M10 and M11 pause for 60 seconds
+				THEN the locked messages will be unlocked after 20 seconds
+				  AND the receiver witch has not yet received a messages get one of the unlocked messages 
+			#>
+		
+			##########################################################
+			# Arrange
+			##########################################################
+			
+			##########################################################
+			# Act
+			##########################################################
+			
+			##########################################################
+			# Assert
+			##########################################################
+			
+			##########################################################
+			# Cleanup
+			##########################################################
+
+		}
 	}
 }
 
