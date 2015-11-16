@@ -61,6 +61,17 @@ Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 		}
 		
 		It "SBClientSimple-CreateMessageIncreaseSubscriptionMessageCount" -Test {
+			<#
+				GIVEN there are multiple senders S1 and S2
+				  AND there is a message sink MS1
+				  AND this sink is in *SINGLECAST* mode
+				  AND this sink contains no message
+				  AND no receiver is available
+				WHEN S1 sends messages M10, M11, M14
+				  AND S2 send messages M12, M13, M15
+				THEN the amount of message in the sink is 6
+			#>
+				
 			# Arrange
 			$messageText = 'Pester-Test-Message';
 			$guid = [guid]::NewGuid().Guid;
@@ -158,16 +169,6 @@ Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 			
 			$subscription = Get-SBSubscriptions -TopicPath $topicName;
 			$subscription.MessageCount | Should Be 0;
-		}
-		
-		It "SBClient-Create" -Test {
-			# Arrange
-			
-			# Act
-
-			
-			# Assert
-
 		}
 	}
 }
