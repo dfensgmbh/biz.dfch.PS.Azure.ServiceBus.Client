@@ -16,29 +16,28 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 	
 	Context "SBClientBroadcast.Tests" {
 		BeforeEach {		
-			# Management module for service bus - required to create, check and delete queues/topis/subscriptions
-			$moduleName = 'biz.dfch.PS.Azure.ServiceBus.Setup';
+			# Import management module for service bus - required to create, check and delete queues/topis/subscriptions
+			$moduleName = 'biz.dfch.PS.Azure.ServiceBus.Management';
 			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
-			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Setup -ErrorAction:SilentlyContinue;
+			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Management -ErrorAction:SilentlyContinue;
 			Import-Module $moduleName -ErrorAction:SilentlyContinue;
 			
-			# Set Modulname
-			$moduleName = "biz.dfch.PS.Azure.ServiceBus.Client"
-			
-			# Remove Module if it is imported
-
+			# Import client module for service bus - required to send and receive messages
+			$moduleName = "biz.dfch.PS.Azure.ServiceBus.Client";			
 			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
 			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Client -ErrorAction:SilentlyContinue;
-			Import-Module "$here\..\src\$moduleName.psd1"  -ErrorAction:SilentlyContinue -Force;
+			Import-Module $moduleName -ErrorAction:SilentlyContinue -Force;
 			
 			# Set variable to the loacal environment
 			$biz_dfch_PS_Azure_ServiceBus_Client.EndpointServerName = (Get-SBFarm).Hosts[0].Name;
 			$biz_dfch_PS_Azure_ServiceBus_Client.NameSpace = (Get-SBNamespace).Name;
+			$biz_dfch_PS_Azure_ServiceBus_Management.DefaultNameSpace = $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace;
 			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKeyName = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).KeyName;
 			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).PrimaryKey;
 			
 			# Create Topic
-			$topicName = "PesterTestTopic";
+			$guid = [guid]::NewGuid().Guid;
+			$topicName = "Pester-{0}" -f $guid;
 			New-SBTopic -Path $topicName;
 			
 			# Enter Servicebus
@@ -50,7 +49,12 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			Remove-SBTopic -Path $topicName -force;
 		}
 				
-		It "NewMessages-Broadcast" -Test {
+		It "SBClientBroadcast-SendAndAllRecipientsLockMessages" -Test {
+		
+			<#
+				No real test case available...
+			#>
+		
 			##########################################################
 			# Arrange
 			##########################################################
@@ -69,11 +73,12 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			# Arrange MessageReceiver (separate sessions)
 			$newJobs = New-Object System.Collections.ArrayList
 			$subscriptionPaths = New-Object System.Collections.ArrayList;
+			$guid = [guid]::NewGuid().Guid;
 
 			for ($i=1; $i -le $amountOfReceiver; $i++)
 			{
 				# Arrange Subscriptions
-				$subscriptionName = 'PesterTestSub{0}' -f $i;
+				$subscriptionName = 'Pester-{0}-{1}' -f $guid, $i;
 				$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
 				$subscriptionPaths.Add($subscriptionPath);
 				New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
@@ -90,7 +95,7 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			$messageSenders = New-Object System.Collections.ArrayList;
 			for ($i=1; $i -le $amountMessageSender; $i++) 
 			{
-				$messageSenderNew = New-SBMessageSender -QueueName $topicName;
+				$messageSenderNew = Get-SBMessageSender -Facility $topicName;
 				$messageSenders.Add($messageSenderNew);
 			}
 			##########################################################
@@ -100,15 +105,15 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			$messageIds = New-Object System.Collections.ArrayList;
 			for ($i=1; $i -le $messageAmount; $i++) 
 			{
-				if ($amountMessageSender -eq $amountMessageSender) 
+				if ($numberOfSender -eq $amountMessageSender) 
 				{
-					$numberOfSender = 1;
+					$numberOfSender = 0;
 				} 
 				else 
 				{
 					$numberOfSender++;
 				}
-				$messageIdNew = New-SBMessage $messageText -QueueName $topicName -MessageClient $messageSenders[$numberOfSender];
+				$messageIdNew = New-SBMessage $messageText -Facility $topicName -MessageClient $messageSenders[$numberOfSender-1];
 				$messageIds.Add($messageIdNew);
 			}
 			##########################################################
@@ -158,6 +163,294 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			# Cleanup
 			##########################################################
 			Remove-Job $newJobs;
+		}
+		
+		It "SBClientBroadcast-SendAndAllRecipientsReceiveMessages" -Test {
+			<# 
+				GIVEN there are multiple senders S1 and S2
+				  AND there is a message sink MS1
+				  AND this sink is in *BROADCAST* mode
+				  AND this sink has multiple subscription SUB1, SUB2, SUB3
+				  AND there are multiple receivers R1, R2, R3
+				WHEN R1 subscript to SUB1
+				  AND R2 subscript to SUB2
+				  AND R3 subscribe to SUB3
+				  AND S1 sends messages M10, M11, M14
+				  AND S2 send messages M12, M13, M15
+				  AND the number of the messages indicates the sequence in which they are sent
+				THEN every message is delivered exactly one time to each of the receivers
+				  AND all receivers receive all message
+			#>
+		
+			##########################################################
+			# Arrange
+			##########################################################
+			$pathMessageHelper = "$here\getMessageHelper.ps1"
+
+			# Arrange test parameter
+			$receiveMode = 'ReceiveAndDelete';
+			$waitTimeoutSec = 10;
+			$amountOfReceiver = 3;
+			$receiveCyclesPerReceiver = 10;
+			$amountMessageSender = 2;
+			$messageAmount = 6;
+			$numberOfSender = 3;
+			$messageText = "TestMessageBroadcast"
+			
+			# Arrange MessageReceiver (separate sessions)
+			$newJobs = New-Object System.Collections.ArrayList
+			$subscriptionPaths = New-Object System.Collections.ArrayList;
+			$guid = [guid]::NewGuid().Guid;
+
+			for ($i=1; $i -le $amountOfReceiver; $i++)
+			{
+				# Arrange Subscriptions
+				$subscriptionName = 'Pester-{0}-{1}' -f $guid, $i;
+				$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
+				$subscriptionPaths.Add($subscriptionPath);
+				New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
+			}
+			
+			# Arrange MessageSender
+			$messageSenders = New-Object System.Collections.ArrayList;
+			for ($i=1; $i -le $amountMessageSender; $i++) 
+			{
+				$messageSenderNew = Get-SBMessageSender -Facility $topicName;
+				$messageSenders.Add($messageSenderNew);
+			}
+			##########################################################
+			# Act
+			##########################################################
+			# Send Message
+			$messageIds = New-Object System.Collections.ArrayList;
+			for ($i=1; $i -le $messageAmount; $i++) 
+			{
+				if ($numberOfSender -eq $amountMessageSender) 
+				{
+					$numberOfSender = 1;
+				} 
+				else 
+				{
+					$numberOfSender++;
+				}
+				$messageIdNew = New-SBMessage $messageText -Facility $topicName -MessageClient $messageSenders[$numberOfSender-1];
+				$messageIds.Add($messageIdNew);
+			}
+			
+			# Get subscribtion after send
+			$getSubscriptions = Get-SBSubscriptions -TopicPath $topicName;
+			
+			# Receive Message
+			for ($i=1; $i -le $amountOfReceiver; $i++)
+			{
+				# Get Subscription
+				$subscriptionName = 'Pester-{0}-{1}' -f $guid, $i;
+				$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
+				
+				# Receive Sessions
+				$jobString = '{0} -Path "{1}" -WaitTimeoutSec {2} -Receivemode "{3}"' -f $pathMessageHelper, $subscriptionPath, $WaitTimeoutSec, $receiveMode;
+				$jobString = [Scriptblock]::Create("1.."+$receiveCyclesPerReceiver+" | % {"+$jobString+"}")
+				# write-host $jobString;
+				$jobStart = Start-Job -ScriptBlock $jobString;
+				$newJobs.Add($jobStart);
+			}
+			
+			##########################################################
+			# Assert
+			##########################################################
+			
+			# Assert subscriptions			
+			$getSubscriptions.count | Should Be $amountOfReceiver;
+			$messageSenders.count | Should Be $amountMessageSender;
+			$newJobs.count | Should Be $amountOfReceiver;
+			
+			# Check subscriptions message count / every subscription has all messages
+			foreach ($subscription in $getSubscriptions) 
+			{
+				$subscription.MessageCount | Should Be $messageAmount;
+			}
+			
+			# Waite till all jobs are done
+			$null = Wait-Job -Job $newJobs;
+			
+			# Get results (Messages) per Job
+			foreach ($job in $newJobs)
+			{
+				$jobResults = Receive-Job $job;
+				
+				# Assert message per receiver
+					# if amount of message is greater than receive cycles then the receiver should have same amount of massages as receive cycles
+					# if amount of message is lesser than receive cycles - receiver should have same amount of messages as amount of send messages
+				if ($receiveCyclesPerReceiver -ge $messageAmount) 
+				{
+					($jobResults | where { $_ -ne $null }).count | Should Be $messageAmount;
+				} 
+				else 
+				{
+					$jobResults.count | Should Be $receiveCyclesPerReceiver;
+				}
+				
+				# Get Message
+				foreach ($resultMessage in ($jobResults | where { $_ -ne $null })) 
+				{
+					# Assert MessageId (send and receive)
+					$messageIds -contains $resultMessage.MessageId | Should be $true;
+				}
+			}
+			
+			# Get subscribtion after receive
+			$getSubscriptionsAfterRecv = Get-SBSubscriptions -TopicPath $topicName;
+			
+			# Check subscriptions message count / every subscription has all messages
+			foreach ($subscription in $getSubscriptionsAfterRecv) 
+			{
+				$subscription.MessageCount | Should Be 0;
+			}
+			
+			##########################################################
+			# Cleanup
+			##########################################################
+			Remove-Job $newJobs;
+		}
+		
+		It "SBClientBroadcast-SendMessagesAndAllRecipientsSubscribe" -Test {
+			<# 
+				GIVEN there are multiple senders S1 and S2
+				  AND there is a message sink MS1
+				  AND this sink is in *BROADCAST* mode
+				  AND this sink has multiple subscription SUB1, SUB2, SUB3
+				  AND there are multiple receivers R1, R2, R3
+				WHEN R1 subscript to SUB1
+				  AND R2 subscript to SUB2
+				  AND R3 subscribe to SUB3
+				  AND S1 sends messages M10, M11, M14
+				  AND S2 send messages M12, M13, M15
+				  AND the number of the messages indicates the sequence in which they are sent
+				THEN every message is delivered exactly one time to each of the receivers
+				  AND it the receivers do not acknowledge message receipt
+			#>
+		
+			##########################################################
+			# Arrange
+			##########################################################
+			$pathMessageHelper = "$here\getMessageHelper.ps1"
+
+			# Arrange test parameter
+			$receiveMode = 'ReceiveAndDelete';
+			$waitTimeoutSec = 10;
+			$amountOfReceiver = 3;
+			$receiveCyclesPerReceiver = 10;
+			$amountMessageSender = 2;
+			$messageAmount = 6;
+			$numberOfSender = 2;
+			$messageText = "TestMessageBroadcast"
+			
+			# Arrange MessageReceiver (separate sessions)
+			$subscriptionPaths = New-Object System.Collections.ArrayList;
+			$guid = [guid]::NewGuid().Guid;
+
+			for ($i=1; $i -le $amountOfReceiver; $i++)
+			{
+				# Arrange Subscriptions
+				$subscriptionName = 'Pester-{0}-{1}' -f $guid, $i;
+				$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
+				$subscriptionPaths.Add($subscriptionPath);
+				New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
+			}
+			
+			# Arrange MessageSender
+			$messageSenders = New-Object System.Collections.ArrayList;
+			for ($i=1; $i -le $amountMessageSender; $i++) 
+			{
+				$messageSenderNew = Get-SBMessageSender -Facility $topicName;
+				$messageSenders.Add($messageSenderNew);
+			}
+			##########################################################
+			# Act
+			##########################################################
+			# Send Message
+			$messageIds = New-Object System.Collections.ArrayList;
+			for ($i=1; $i -le $messageAmount; $i++) 
+			{
+				if ($numberOfSender -eq $amountMessageSender) 
+				{
+					$numberOfSender = 1;
+				} 
+				else 
+				{
+					$numberOfSender++;
+				}
+				$messageIdNew = New-SBMessage $messageText -Facility $topicName -MessageClient $messageSenders[$numberOfSender-1];
+				$messageIds.Add($messageIdNew);
+			}
+			
+			# Get subscribtion after send
+			$getSubscriptions = Get-SBSubscriptions -TopicPath $topicName;
+			
+
+			##########################################################
+			# Assert
+			##########################################################
+			
+			# Assert subscriptions			
+			$getSubscriptions.count | Should Be $amountOfReceiver;
+			$messageSenders.count | Should Be $amountMessageSender;
+			
+			# Check subscriptions message count / every subscription has all messages
+			foreach ($subscription in $getSubscriptions) 
+			{
+				$subscription.MessageCount | Should Be $messageAmount;
+			}
+			
+			##########################################################
+			# Cleanup
+			##########################################################
+
+		}
+		
+		It "SBClientBroadcast-SendToSubscriptionFail" -Test {
+			<# 
+				GIVEN there is a sink MS1
+				  AND this sink is in *BROADCAST* mode
+				  AND this sink has a subscription SUB1
+				  AND there is a sender S1
+				WHEN S1 send a message to subscription SUB1
+				THEN S1 get an exception
+			#>
+		
+			##########################################################
+			# Arrange
+			##########################################################
+			# Arrange Subscriptions
+			$guid = [guid]::NewGuid().Guid;
+			$subscriptionName = 'Pester-{0}-{1}' -f $guid, 1;
+			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
+			$messageText = "TestMessageBroadcast"
+			
+			##########################################################
+			# Act
+			##########################################################
+			# Try send a message to a subscription
+			$exception = $null;
+			try 
+			{
+				$messageIdNew = New-SBMessage $messageText -Facility $subscriptionPath -Debug -Retry 1;
+			}
+			catch 
+			{
+				$exception = $_.Exception;
+			}
+			
+			
+			##########################################################
+			# Assert
+			##########################################################
+			$exception | Should be (!$null);
+			
+			##########################################################
+			# Cleanup
+			##########################################################
+
 		}
 	}
 }

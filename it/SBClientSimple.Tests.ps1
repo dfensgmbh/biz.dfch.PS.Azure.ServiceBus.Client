@@ -17,26 +17,31 @@ Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 	Context "SBClientSimple.Tests" {
 		
 		BeforeEach {
-			# Management module for service bus - required to create, check and delete queues/topis/subscriptions
-			$moduleName = 'biz.dfch.PS.Azure.ServiceBus.Setup';
+			# Import management module for service bus - required to create, check and delete queues/topis/subscriptions
+			$moduleName = 'biz.dfch.PS.Azure.ServiceBus.Management';
 			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
-			Import-Module $moduleName;
+			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Management -ErrorAction:SilentlyContinue;
+			Import-Module $moduleName -ErrorAction:SilentlyContinue;
 			
-			# Set Modulname
-			$moduleName = "biz.dfch.PS.Azure.ServiceBus.Client"
-			$topicName = "PesterTestTopic";
-			
+			# Import client module for service bus - required to send and receive messages
+			$moduleName = "biz.dfch.PS.Azure.ServiceBus.Client";			
 			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
-			# Import Modul from git repo
-			Import-Module "$here\..\src\$moduleName.psd1" -Force
+			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Client -ErrorAction:SilentlyContinue;
+			Import-Module $moduleName -ErrorAction:SilentlyContinue -Force;
+			
 			# Set variable to the loacal environment
 			$biz_dfch_PS_Azure_ServiceBus_Client.EndpointServerName = (Get-SBFarm).Hosts[0].Name;
 			$biz_dfch_PS_Azure_ServiceBus_Client.NameSpace = (Get-SBNamespace).Name;
+			$biz_dfch_PS_Azure_ServiceBus_Management.DefaultNameSpace = $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace;
 			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKeyName = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).KeyName;
 			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).PrimaryKey;
 			
 			# Create Topic
+			$guid = [guid]::NewGuid().Guid;
+			$topicName = "Pester-{0}" -f $guid;
 			New-SBTopic -Path $topicName;
+			
+			# Enter Servicebus
 			$enterSBServer = Enter-SBServer;
 		}
 		
@@ -56,9 +61,21 @@ Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 		}
 		
 		It "SBClientSimple-CreateMessageIncreaseSubscriptionMessageCount" -Test {
+			<#
+				GIVEN there are multiple senders S1 and S2
+				  AND there is a message sink MS1
+				  AND this sink is in *SINGLECAST* mode
+				  AND this sink contains no message
+				  AND no receiver is available
+				WHEN S1 sends messages M10, M11, M14
+				  AND S2 send messages M12, M13, M15
+				THEN the amount of message in the sink is 6
+			#>
+				
 			# Arrange
 			$messageText = 'Pester-Test-Message';
-			$subscriptionName = 'PesterTestSub';
+			$guid = [guid]::NewGuid().Guid;
+			$subscriptionName = 'Pester-{0}' -f $guid;
 			
 			# Arrange test parameter
 			$receiveMode = 'PeekLock';
@@ -71,7 +88,7 @@ Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 			$messageSenders = New-Object System.Collections.ArrayList;
 			for ($i=1; $i -le $amountMessageSender; $i++) 
 			{
-				$messageSenderNew = New-SBMessageSender -QueueName $topicName;
+				$messageSenderNew = Get-SBMessageSender -Facility $topicName;
 				$messageSenders.Add($messageSenderNew);
 			}
 
@@ -87,7 +104,7 @@ Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 				{
 					$numberOfSender++;
 				}
-				$messageIdNew = New-SBMessage $messageText -QueueName $topicName -MessageClient $messageSenders[$numberOfSender];
+				$messageIdNew = New-SBMessage $messageText -Facility $topicName -MessageClient $messageSenders[$numberOfSender];
 				$messageIds.Add($messageIdNew);
 			}
 			
@@ -101,12 +118,13 @@ Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 			# Arrange
 			$messageText = 'Pester-Test-Message';
 			
-			$subscriptionName = 'PesterTestSub';
+			$guid = [guid]::NewGuid().Guid;
+			$subscriptionName = 'Pester-{0}' -f $guid;
 			$subscriptionNew = New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
 			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
 			# Act			
-			$newSBMessage = New-SBMessage $messageText -QueueName $topicName;
-			$getSBMessage = Get-SBMessage -BodyAsProperty -QueueName $subscriptionPath -ReceiveMode 'ReceiveAndDelete';
+			$newSBMessage = New-SBMessage $messageText -Facility $topicName;
+			$getSBMessage = Get-SBMessage -BodyAsProperty -Facility $subscriptionPath -ReceiveMode 'ReceiveAndDelete';
 			
 			# Assert 
 			$newSBMessage | Should Not Be $null;
@@ -117,11 +135,15 @@ Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 			# Arrange
 			$messageText = 'Pester-Test-Message';
 			
+			$guid = [guid]::NewGuid().Guid;
+			$subscriptionName = 'Pester-{0}' -f $guid;
+			$subscriptionNew = New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
+			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
 			# Act			
-			$newSBMessage = New-SBMessage $messageText -QueueName $topicName;
+			$newSBMessage = New-SBMessage $messageText -Facility $topicName;
 			
 			# Assert 
-			$getSBMessage = Get-SBMessage -BodyAsProperty -QueueName $queueName -ReceiveMode 'PeekLock';
+			$getSBMessage = Get-SBMessage -BodyAsProperty -Facility $subscriptionPath -ReceiveMode 'PeekLock';
 			$newSBMessage | Should Not Be $null;
 			$getSBMessage.Properties['Body'] | Should Be $messageText;
 			
@@ -133,26 +155,20 @@ Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 			# Arrange
 			$messageText = 'Pester-Test-Message';
 			
+			$guid = [guid]::NewGuid().Guid;
+			$subscriptionName = 'Pester-{0}' -f $guid;
+			$subscriptionNew = New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
+			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
 			# Act			
-			$newSBMessage = New-SBMessage $messageText -QueueName $topicName;
+			$newSBMessage = New-SBMessage $messageText -Facility $topicName;
 			
 			# Assert 
-			$getSBMessage = Get-SBMessage -BodyAsProperty -QueueName $queueName -ReceiveMode 'ReceiveAndDelete';
+			$getSBMessage = Get-SBMessage -BodyAsProperty -Facility $subscriptionPath -ReceiveMode 'ReceiveAndDelete';
 			$newSBMessage | Should Not Be $null;
 			$getSBMessage.Properties['Body'] | Should Be $messageText;
 			
 			$subscription = Get-SBSubscriptions -TopicPath $topicName;
 			$subscription.MessageCount | Should Be 0;
-		}
-		
-		It "SBClient-Create" -Test {
-			# Arrange
-			
-			# Act
-
-			
-			# Assert
-
 		}
 	}
 }
