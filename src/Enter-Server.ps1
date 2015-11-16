@@ -1,15 +1,17 @@
-function New-MessageSender {
+function Enter-Server {
 <#
 .SYNOPSIS
-Creates a message sender to the Service Bus Message Factory.
+Performs a login to the Service Bus Message Factory.
 
 
 .DESCRIPTION
-Creates a message sender to the Service Bus Message Factory.
+Performs a login to the Service Bus Message Factory.
+
+This is the first Cmdlet to be executed and required for all other Cmdlets of this module. It creates service references to the routers of the application.
 
 
 .OUTPUTS
-This Cmdlet returns a SbmpMessageSender object with references to the MessageFactory of the application. On failure it returns $null.
+This Cmdlet returns a SbmpMessagingFactory object with references to the MessageFactory of the application. On failure it returns $null.
 
 
 .INPUTS
@@ -17,35 +19,55 @@ See PARAMETER section for a description of input parameters.
 
 
 .EXAMPLE
-$sender = New-MessageSender;
-$sender
+$svc = Enter-Server;
+$svc
 
-Creates a message sender to the Service Bus Message Factory with default credentials (current user) and against server defined within module configuration xml file.
+Performs a login to the Service Bus Message Factory with default credentials (current user) and against server defined within module configuration xml file.
 
-	
+
 #>
 [CmdletBinding(
 	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
 )]
-[OutputType([Microsoft.ServiceBus.Messaging.MessageSender])]
+[OutputType([Microsoft.ServiceBus.Messaging.MessagingFactory])]
 Param 
 (
-	# [Optional] The MessageFactory. If you do not 
+	# [Optional] The EndpointServerName such as 'localhost'. If you do not 
 	# specify this value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 0)]
 	[ValidateNotNullorEmpty()]
-	$MessageFactory = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageFactory
+	[string] $EndpointServerName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).EndpointServerName
 	, 
-	# [Optional] The QueueName such as 'MyQueue'. If you do not specify this 
+	# [Optional] The RuntimePort such as '123'. If you do not specify this 
 	# value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 1)]
-	[ValidateNotNullorEmpty()]
-	[string] $QueueName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultQueueName
+	[int] $RuntimePort = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).RuntimePort
+	, 
+	# [Optional] The SharedAccessKeyName. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 2)]
+	[string] $SharedAccessKeyName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKeyName	
+	,
+	# [Optional] The SharedAccessKey. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 3)]
+	[string] $SharedAccessKey = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKey	
+	,
+	# [Optional] The Namespace such as 'ServiceBusDefaultNamespace'. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 4)]
+	[string] $Namespace = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).NameSpace
+	,
+	# [Optional] The TransportType such as 'Amqp'. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 5)]
+	[ValidateSet('Amqp', 'NetMessaging')]
+	[string] $TransportType = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).TransportType
 	, 
 	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
 	# which to perform login. Default is credential as specified in the module 
 	# configuration file.
-	[Parameter(Mandatory = $false, Position = 2)]
+	[Parameter(Mandatory = $false, Position = 6)]
 	[alias("cred")]
 	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
 )
@@ -54,20 +76,7 @@ BEGIN
 {
 	$datBegin = [datetime]::Now;
 	[string] $fn = $MyInvocation.MyCommand.Name;
-	Log-Debug $fn ("CALL. MessageFactory Endpoint '{0}'; QueueName '{1}'; Username '{2}'" -f $MessageFactory.Address.AbsolutePath, $QueueName, $Credential.Username ) -fac 1;
-	
-	# Check MessageFactory connection
-	if ( $MessageFactory -isnot [Microsoft.ServiceBus.Messaging.MessagingFactory] ) {
-		$msg = "MessageFactory: Parameter validation FAILED. Connect to the message factory before using the Cmdlet.";
-		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $MessageFactory;
-		$PSCmdlet.ThrowTerminatingError($e);
-	}
-	
-	# Check MessageFactory status
-	if ( $MessageFactory.IsClosed ) {
-		Log-Info $fn ("MessageFactory Endpoint '{0}' is closed -> reconnect" -f $MessageFactory.Address.AbsolutePath, $QueueName, $Credential.Username ) -fac 1;
-		[Microsoft.ServiceBus.Messaging.MessagingFactory] $MessageFactory = Enter-ServiceBus -EndpointServerName $MessageFactory.Address.Host -RuntimePort $MessageFactory.Address.Port -Namespace $MessageFactory.Address.Segments[-1];
-	}
+	Log-Debug $fn ("CALL. EndpointServerName '{0}'; RuntimePort '{1}'; Namespace '{2}'; Username '{3}'" -f $EndpointServerName, $RuntimePort, $Namespace, $Credential.Username ) -fac 1;
 }
 # BEGIN 
 
@@ -81,22 +90,32 @@ try
 	# Parameter validation
 	# N/A
 	
-	# Prepare MessageClient
-	[Microsoft.ServiceBus.Messaging.MessageSender] $MessageSenderClient = $null;
-	# Get MessageClient from global
-	if ( (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient -is [Microsoft.ServiceBus.Messaging.MessageSender] ) {
-		if ( !(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient.IsClosed -and (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient.Path -eq $QueueName  ) {
-			[Microsoft.ServiceBus.Messaging.MessageSender] $MessageSenderClient = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient;
+	# Get local instance parameters	
+	if ( !(!(Get-Module ServiceBus -ListAvailable -EA SilentlyContinue)) -and $EndpointServerName -eq 'EndpointServerName' )
+	{
+		Import-Module -Name ServiceBus -EA SilentlyContinue;
+		if ( (Get-SBFarm).Hosts[0].Name -eq $env:Computername ) 
+		{
+			$EndpointServerName = (Get-SBFarm).Hosts[0].Name;
+			$Namespace = (Get-SBNamespace).Name;
+			$SharedAccessKeyName = (Get-SBAuthorizationRule -NamespaceName (Get-SBNamespace).Name -Name RootManageSharedAccessKey).KeyName;
+			$SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName (Get-SBNamespace).Name -Name RootManageSharedAccessKey).PrimaryKey;
+			
+			(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).EndpointServerName = $EndpointServerName;
+			(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Namespace = $Namespace;
+			(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKeyName = $SharedAccessKeyName;
+			(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKey = $SharedAccessKey;
 		}
 	}
-
-	# Create MessageClient
-	if ( $MessageSenderClient -eq $null ) {
-		[Microsoft.ServiceBus.Messaging.MessageSender] $MessageSenderClient = $MessageFactory.CreateMessageSender($QueueName);	
-	}
-	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageClient = $MessageSenderClient;
 	
-	$OutputParameter = $MessageSenderClient;
+	# Prepare connection string	
+	$ConnectionString = 'Endpoint=sb://{0}/{1};RuntimePort={2};SharedAccessKeyName={3};SharedAccessKey={4};TransportType={5}' -f $EndpointServerName, $Namespace, $RuntimePort, $SharedAccessKeyName, $SharedAccessKey, $TransportType;
+	
+	# Create message factory
+	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory = [Microsoft.ServiceBus.Messaging.MessagingFactory]::CreateFromConnectionString($ConnectionString);
+	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client = $null;
+	
+	$OutputParameter = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory;
 	$fReturn = $true;
 
 }
@@ -158,7 +177,7 @@ END
 
 } # function
 
-if($MyInvocation.ScriptName) { Export-ModuleMember -Function New-MessageSender; } 
+if($MyInvocation.ScriptName) { Export-ModuleMember -Function Enter-Server; } 
 
 # 
 # Copyright 2014-2015 d-fens GmbH
@@ -179,8 +198,8 @@ if($MyInvocation.ScriptName) { Export-ModuleMember -Function New-MessageSender; 
 # SIG # Begin signature block
 # MIIXDwYJKoZIhvcNAQcCoIIXADCCFvwCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUMWOUDAIgtGaMCG0XMqY/RL3R
-# zEKgghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU99YchxPTYJUFoDsns+So/4v1
+# 3vqgghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
 # VzELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNV
 # BAsTB1Jvb3QgQ0ExGzAZBgNVBAMTEkdsb2JhbFNpZ24gUm9vdCBDQTAeFw0xMTA0
 # MTMxMDAwMDBaFw0yODAxMjgxMjAwMDBaMFIxCzAJBgNVBAYTAkJFMRkwFwYDVQQK
@@ -279,26 +298,26 @@ if($MyInvocation.ScriptName) { Export-ModuleMember -Function New-MessageSender; 
 # MDAuBgNVBAMTJ0dsb2JhbFNpZ24gQ29kZVNpZ25pbmcgQ0EgLSBTSEEyNTYgLSBH
 # MgISESENFrJbjBGW0/5XyYYR5rrZMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEM
 # MQowCKACgAChAoAAMBkGCSqGSIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQB
-# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBQRSnD9dCW8dJFi
-# fiMmYKwILlxSVjANBgkqhkiG9w0BAQEFAASCAQBAlXRaheU/7HKLYPKXawcBET2Z
-# P7piAIbz75OOOAW/7ZnShlUTPMLzMF8KHUY2TCLUj9mrs+PrzfVFadrl34xRGLtN
-# cAr+yIhyvVBlLiwUkeyQqlRz1tt+1+51YMn/8nOar01Ne+ys4itMknBRwlGVftBr
-# mptWGBH/NTw2T6As0YBrcTvP1KTHNmyrHzChvF4Q8jtnhTUcAACsTtG5VvE8PJlb
-# IYd/6PpF17/+ByhlFKsVYlyge1JlQqVzTGnkkhwIgNfA4XhcaqIDn7Z4CNqQ7s9U
-# UMAUD4VU/UfEbRgeRjlGVZ8qJZRO0J1vOL7vLj5cLV2LPhPweGFEt3DFZOKCoYIC
+# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBRK7uTLLkjQQdQr
+# hZpHGZnIm3SXKzANBgkqhkiG9w0BAQEFAASCAQBtL1vyzPAUczoRmwKpW/v1bUus
+# OQZPsOPpGGEEITHdGUsIVqIivMPjTyDHrS3IqcNl90FHXngzQsO3x757LoLlimnz
+# bnStyjJj7gWv24e4BwPLHf7iaO682oPXWotOWH+p+BTMZbqCQ6gDkJwEhfs8woPL
+# 83uc/Q12QqL+MmwuZJHNpQL0gUi0goipvu5yifHG70fZCWmq3TaNhjKGzqp2R3jC
+# gEgztdJDn+8DFNc9GHmquP0o2CcAGEnYPlqgXohZBLu7wMyyDGHkE337Too41rJb
+# tSczObTIwFOKELpbrM6jfKRl5YIQuftGBX6LWiy9zeV3XpleECdC4g3Zza6zoYIC
 # ojCCAp4GCSqGSIb3DQEJBjGCAo8wggKLAgEBMGgwUjELMAkGA1UEBhMCQkUxGTAX
 # BgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGlt
 # ZXN0YW1waW5nIENBIC0gRzICEhEhBqCB0z/YeuWCTMFrUglOAzAJBgUrDgMCGgUA
 # oIH9MBgGCSqGSIb3DQEJAzELBgkqhkiG9w0BBwEwHAYJKoZIhvcNAQkFMQ8XDTE1
-# MTEwNDE0MzkxOVowIwYJKoZIhvcNAQkEMRYEFDeUwlzVAT9sO+FTLlfrRJ5d+TdW
+# MTExNjEwNTg1OVowIwYJKoZIhvcNAQkEMRYEFNDrGK4N56huw9Fx9yIWhu219UVm
 # MIGdBgsqhkiG9w0BCRACDDGBjTCBijCBhzCBhAQUs2MItNTN7U/PvWa5Vfrjv7Es
 # KeYwbDBWpFQwUjELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYt
 # c2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGltZXN0YW1waW5nIENBIC0gRzICEhEh
-# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQCTViW7YCdsNldOvOyR
-# fyqw4wU3Tstz2VwQ7kwrSeIhRsW63dY58aEr8dHzmDbKFDzNVMohGt3CXxWyyIT5
-# T0bafFKCccJfDi+G2UBnl+lNzI+iDPo+Aa0DYLwSmwKfOkZdl1pLu2XB6DE0P4xr
-# 8Kr41/6PGEXZjkWCfBYRZ9IDt4xcAcR92MEstLX7KfXEiChI7j8KIHDSScayYaSI
-# i7dYkm8v6ESV/yEK6AsCUV3h5YeMvYbxMPrXs4F38EUJs9tofmMw1okH9vbfllq8
-# DcfP676usFEY5ZcnlMO1c+YsxaClM8Mff7DQ2Ske5u7iY1uSeIp+/l4i1WT8Dqe5
-# tIqb
+# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQBkwKHpAXkUKAIK/GD4
+# 7+4OfNdmuFn/warmf7oGhGM8eFLcuURrn2NS/9lErrNpb07hSUCtYiEdASGEhO2X
+# R5AglzAI5PnYg26HGp25bYNXuMvvYv/gMmO37mKjqfDFUptWo+DaV3yRFVgbw6Gs
+# YJooVzTGBV5I4SlWopjmW3hhtIr8x/w/aS2miqM+BNiqvfG2wFDNIWFd45gVY1G6
+# PAPu6GoaHfXt33HMNyM5hwAEwPkUeeIRuNb+9vlvOK+Jt65CwGFyA7gN2iMmfc5D
+# kika3AvMg5/tOLCmxvmb6K7uZ7RTiqLNmda7xqN+00toDHJXYWatvfzjyrie0jPw
+# jQS4
 # SIG # End signature block

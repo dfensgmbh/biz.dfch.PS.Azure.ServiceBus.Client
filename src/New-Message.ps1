@@ -1,78 +1,248 @@
 function New-Message {
 <#
 .SYNOPSIS
-Creates a message for the Service Bus Message Factory.
-
+Sends a message to a sender client, which is based on the Service Bus Messaging Factory.
 
 .DESCRIPTION
-Creates a message for the Service Bus Message Factory.
-
+Sends a message to a sender client, which is based on the Service Bus Messaging Factory.
 
 .OUTPUTS
-This Cmdlet returns the SequenceNumber from the MessageFactory Message object. On failure it returns $null.
-
+This Cmdlet returns the MessageId from the Messaging Factory message object. In case of failure is trying '-Retry' times, otherwise returns $null.
 
 .INPUTS
 See PARAMETER section for a description of input parameters.
 
+.EXAMPLE
+$messageid = New-Message 'MyMessage';
 
 .EXAMPLE
-$messageid = New-Message;
-$messageid
+$messageid = New-Message 'Unimportant' -TimeToLiveSec 60;
 
-Creates a message for the Service Bus Message Factory and against server defined within module configuration xml file.
+.EXAMPLE
+$messageid = New-Message 'MyMessage' -Properties @{'Prop1'='Valu1';'Prop2'='Valu2'} -Label 'OrderEngine1' -Id 'MyMessageId1';
 
-	
+.EXAMPLE
+[array]$messageid = @('Message1', 'Message2') | New-Message;
+
+Sends a message to a sender client, which is based on the Service Bus Messaging Factory against server defined within module configuration xml file.
 #>
 [CmdletBinding(
-	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
+	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/',
+	SupportsShouldProcess=$true,
+    ConfirmImpact="Low"
 )]
 [OutputType([string])]
 Param 
 (
 	# [Required] The Message such as 'Message 123'.
-	[Parameter(Mandatory = $true, Position = 0)]
+	[Parameter(Mandatory = $true, ValueFromPipeline = $true, Position = 0)]
 	[ValidateNotNullorEmpty()]
-	$Message
+	$InputObject
+	,
+	# [Optional] Set message id.
+	[Parameter(Mandatory = $false, Position = 1)]
+	[alias("MessageId")]
+	[string] $Id
 	, 
 	# [Optional] Sets a application specific label.
-	[Parameter(Mandatory = $false, Position = 1)]
-	[string] $MessageLabel
+	[Parameter(Mandatory = $false, Position = 2)]
+	[alias("MessageLabel")]
+	[string] $Label
 	, 
 	# [Optional] Sets addional message properties.
-	[Parameter(Mandatory = $false, Position = 1)]
-	[hashtable] $MessageProperties
+	[Parameter(Mandatory = $false, Position = 3)]	
+	[hashtable] $Properties
 	, 
 	# [Optional] The TimeToLive is the duration after which the message expires, starting from when the message is sent to the Service Bus.
-	[Parameter(Mandatory = $false, Position = 2)]
-	[ValidateNotNullorEmpty()]
-	[int] $MessageTimeToLiveSec
-	, 
-	# [Optional] The QueueName such as 'MyQueue'. If you do not specify this 
-	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 3)]
-	[ValidateNotNullorEmpty()]
-	[string] $QueueName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultQueueName
-	, 
-	# [Optional] The Format such as 'JSON'. If you do not specify this 
-	# value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 4)]
 	[ValidateNotNullorEmpty()]
-	[string] $MessageFormat = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Format
+	[alias("ttl")]
+	[int] $TimeToLiveSec
 	, 
-	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
-	# which to perform login. Default is credential as specified in the module 
-	# configuration file.
+	# [Optional] The Facility such as 'MyQueue'. If you do not specify this 
+	# value it is taken from the module configuration file.
 	[Parameter(Mandatory = $false, Position = 5)]
-	[alias("cred")]
-	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
+	[ValidateNotNullorEmpty()]
+	[alias("queue")]
+	[alias("topic")]
+	[alias("QueueName")]
+	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SendFacility
+	, 
+	# [Optional] The As such as 'JSON'. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 6)]
+	[ValidateNotNullorEmpty()]
+	[string] $As  = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Format
+	, 
+	# [Optional] Messaging Client (instance of the MessagingFactory)
+	[Parameter(Mandatory = $false, Position = 7)]
+	[alias("MessageClient")]
+	$Client
+	,
+	# [Optional] The Retry. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory=$false, Position = 8)]
+	[int]$Retry = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandRetry 
+	,
+	# [Optional] The RetryInterval. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory=$false, Position = 9)]
+	[int]$RetryInterval = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandRetryInterval
 )
 
 BEGIN 
 {
 	$datBegin = [datetime]::Now;
 	[string] $fn = $MyInvocation.MyCommand.Name;
-	Log-Debug $fn ("CALL. QueueName '{0}'; Username '{1}'" -f $QueueName, $Credential.Username ) -fac 1;
+	Log-Debug $fn ("CALL. Facility '{0}'" -f $Facility ) -fac 1;
+
+}
+# BEGIN 
+
+PROCESS 
+{
+
+	[boolean] $fReturn = $false;
+	[int] $CmdRetryCount = 0;
+
+	$Params = @{};
+	$ParamsList = (Get-Command -Name $MyInvocation.InvocationName).Parameters;
+	foreach ($key in $ParamsList.keys)
+	{
+		$var = Get-Variable -Name $key -ErrorAction SilentlyContinue;
+		if($var)
+		{
+			if ( @('Retry', 'RetryInterval') -notcontains $($var.name) -and $var.value -ne $null -and $($var.value) -ne '' ) 
+			{
+				$Params.Add($($var.name), $var.value);
+			}
+		}
+	}
+	Log-Debug $fn ("Operation [{0}] arguments: {1}" -f ($fn -replace 'Worker', ''), ($Params | Out-String));
+
+	# Retry handling
+	for($c = 1; $c -le ($Retry+1); $c++)
+	{
+		try
+		{
+			$OutputParameter = New-MessageWorker @Params;
+			break;
+		}
+		catch
+		{
+			# Throw last execption
+			if ( $c -gt $Retry -or $_.Exception.Message -match 'Connect to the message factory before using the Cmdlet.' )
+			{
+				if ($PSCmdlet.MyInvocation.BoundParameters["Debug"].IsPresent) 
+				{
+					throw;
+				}
+				else
+				{
+					break;
+				}					
+			}
+			Log-Debug $fn ("[{0}/{1}] Retrying operation [{2}]" -f $c, $Retry, ($fn -replace 'Worker', ''));
+			Start-Sleep -Seconds $RetryInterval;
+			$RetryInterval *= 2;
+			continue;
+		}
+	}
+	return $OutputParameter;
+	$fReturn = $true;
+
+}
+# PROCESS
+
+END 
+{
+	$datEnd = [datetime]::Now;
+	Log-Debug -fn $fn -msg ("RET. fReturn: [{0}]. Execution time: [{1}]ms. Started: [{2}]." -f $fReturn, ($datEnd - $datBegin).TotalMilliseconds, $datBegin.ToString('yyyy-MM-dd HH:mm:ss.fffzzz')) -fac 2;
+}
+# END
+
+} # function
+if($MyInvocation.ScriptName) { Export-ModuleMember -Function New-Message; } 
+
+function New-MessageWorker {
+<#
+.SYNOPSIS
+Sends a message to a sender client, which is based on the Service Bus Messaging Factory.
+
+.DESCRIPTION
+Sends a message to a sender client, which is based on the Service Bus Messaging Factory.
+
+.OUTPUTS
+This Cmdlet returns the MessageId from the Messaging Factory message object. On failure it returns $null.
+
+.INPUTS
+See PARAMETER section for a description of input parameters.
+
+.EXAMPLE
+$messageid = New-MessageWorker;
+
+Sends a message to a sender client, which is based on the Service Bus Messaging Factory.
+#>
+[CmdletBinding(
+	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/',
+    SupportsShouldProcess=$true,
+    ConfirmImpact="Low"
+)]
+[OutputType([string])]
+Param 
+(
+	# [Required] The Message such as 'Message 123'.
+	[Parameter(Mandatory = $true, ValueFromPipeline = $true, Position = 0)]
+	[ValidateNotNullorEmpty()]
+	$InputObject
+	,
+	# [Optional] Set message id.
+	[Parameter(Mandatory = $false, Position = 1)]
+	[alias("MessageId")]
+	[string] $Id
+	, 
+	# [Optional] Sets a application specific label.
+	[Parameter(Mandatory = $false, Position = 2)]
+	[alias("MessageLabel")]
+	[string] $Label
+	, 
+	# [Optional] Sets addional message properties.
+	[Parameter(Mandatory = $false, Position = 3)]
+	[alias("MessageProperties")]
+	[hashtable] $Properties
+	, 
+	# [Optional] The TimeToLive is the duration after which the message expires, starting from when the message is sent to the Service Bus.
+	[Parameter(Mandatory = $false, Position = 4)]
+	[ValidateNotNullorEmpty()]
+	[alias("ttl")]
+	[int] $TimeToLiveSec
+	, 
+	# [Optional] The Facility such as 'MyQueue'. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 5)]
+	[ValidateNotNullorEmpty()]
+	[alias("queue")]
+	[alias("topic")]
+	[alias("QueueName")]
+	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SendFacility
+	, 
+	# [Optional] The Format such as 'JSON'. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 6)]
+	[ValidateNotNullorEmpty()]
+	[string] $As = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Format
+	, 
+	# [Optional] Messaging Client (instance of the MessagingFactory)
+	[Parameter(Mandatory = $false, Position = 7)]
+	[alias("MessageClient")]
+	$Client
+)
+
+BEGIN 
+{
+	$datBegin = [datetime]::Now;
+	[string] $fn = $MyInvocation.MyCommand.Name;
+	Log-Debug $fn ("CALL. Facility '{0}'" -f $Facility ) -fac 1;
 
 }
 # BEGIN 
@@ -87,58 +257,92 @@ try
 	# Parameter validation
 	# N/A
 	
-	# Create MessageClient
-	try {
-		$MessageClient = New-MessageSender -QueueName $QueueName;
-	} catch {
-		$msg = $_.Exception.Message;
-		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $MessageClient;
-		Log-Error $fn -msg $msg;
-		$PSCmdlet.ThrowTerminatingError($e);
-	}
-
-	# Convert message body
-	$MessageBody = $Message.ToString();
-	# switch($MessageFormat) 
-	# {
-		# 'xml' { $InputParameter = (ConvertTo-Xml -InputObject $Message).OuterXml; }
-		# 'xml-pretty' { $InputParameter = Format-Xml -String (ConvertTo-Xml -InputObject $Message).OuterXml; }
-		# 'json' { $InputParameter = ConvertTo-Json -InputObject $Message -Compress; }
-		# 'json-pretty' { $InputParameter = ConvertTo-Json -InputObject $Message; }
-		# Default { $InputParameter = $Message; }
-	# }
-	
-	Log-Debug $fn ("-> InputParameter '{0}'; Type '{1}'" -f $InputParameter.toString(), $InputParameter.GetType() );
-	Log-Debug $fn ("-> As '{0}'; Type '{1}'" -f $MessageFormat.toString(), $MessageFormat.GetType() );
-		
-	# Create Message
-	[Microsoft.ServiceBus.Messaging.BrokeredMessage] $BrokeredMessage = [Microsoft.ServiceBus.Messaging.BrokeredMessage]($MessageBody.ToString());
-	$BrokeredMessage.Properties['Body'] = $MessageBody.ToString();
-	$BrokeredMessage.Properties['BodyAs'] = $MessageFormat.ToString();
-	if ( $PSBoundParameters.ContainsKey('MessageProperties') ) {
-		foreach ( $MessageProperty in $MessageProperties.GetEnumerator() ) {
-			$BrokeredMessage.Properties[$MessageProperty.Name] = $MessageProperty.Value.ToString();
+	# Create message client
+	try 
+	{
+		if ( !$PSBoundParameters.ContainsKey('Client') ) 
+		{
+			$Client = Get-MessageSender -Facility $Facility;
 		}
-	}
-	if ( $PSBoundParameters.ContainsKey('MessageLabel') ) {
-		$BrokeredMessage.Label = $MessageLabel;
-	}
-	if ( $PSBoundParameters.ContainsKey('MessageTimeToLiveSec') ) {
-		$BrokeredMessage.TimeToLive = (New-TimeSpan -Seconds $MessageTimeToLiveSec);
-	}	
-	
-	try {
-		$MessageClient.Send($BrokeredMessage);	
-	} catch {
+	} 
+	catch 
+	{
 		$msg = $_.Exception.Message;
-		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $MessageClient;
+		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $Client;
 		Log-Error $fn -msg $msg;
 		$PSCmdlet.ThrowTerminatingError($e);
 	}
 	
-	$OutputParameter = $BrokeredMessage.MessageId;
-	$fReturn = $true;
+	# Get ValueFromPipeline
+	$OutputObject = @();	
+	foreach($Object in $InputObject) {
+		if($PSCmdlet.ShouldProcess($Object)) {
 
+			# Convert message body
+			$MessageBody = $Object.ToString();
+			# switch($Format) 
+			# {
+				# 'xml' { $MessageBody = (ConvertTo-Xml -InputObject $Object).OuterXml; }
+				# 'xml-pretty' { $MessageBody = Format-Xml -String (ConvertTo-Xml -InputObject $Object).OuterXml; }
+				# 'json' { $MessageBody = ConvertTo-Json -InputObject $Object -Compress; }
+				# 'json-pretty' { $MessageBody = ConvertTo-Json -InputObject $Object; }
+				# Default { $MessageBody = $Object; }
+			# }
+			
+			Log-Debug $fn ("-> MessageBody '{0}'; Type '{1}'; As '{2}'; AsType '{3}'" -f $MessageBody.toString(), $MessageBody.GetType(), $As.toString(), $As.GetType() );
+				
+			# Create message
+			[Microsoft.ServiceBus.Messaging.BrokeredMessage] $BrokeredMessage = [Microsoft.ServiceBus.Messaging.BrokeredMessage]($MessageBody.ToString());
+
+			# Set message properties
+			if ( $PSBoundParameters.ContainsKey('Properties') ) 
+			{
+				foreach ( $MessageProperty in $Properties.GetEnumerator() ) 
+				{
+					$BrokeredMessage.Properties[$MessageProperty.Name] = $MessageProperty.Value.ToString();
+				}
+			}
+			if ( $PSBoundParameters.ContainsKey('Id') ) 
+			{
+				$BrokeredMessage.MessageId = $Id;
+			}
+			if ( $PSBoundParameters.ContainsKey('Label') ) 
+			{
+				$BrokeredMessage.Label = $Label;
+			}
+			if ( $PSBoundParameters.ContainsKey('TimeToLiveSec') ) 
+			{
+				$BrokeredMessage.TimeToLive = (New-TimeSpan -Seconds $TimeToLiveSec);
+			}	
+			
+			try 
+			{
+				# Send message
+				$Client.Send($BrokeredMessage);	
+			} 
+			catch 
+			{
+				$msg = $_.Exception.Message;
+				$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $Client;
+				Log-Error $fn -msg $msg;
+				$PSCmdlet.ThrowTerminatingError($e);
+			}
+			
+			$OutputObject += $BrokeredMessage.MessageId;
+			$fReturn = $true;
+			
+		} # if
+	} # foreach
+	
+	# Set output depending is ValueFromPipeline
+	if ( $OutputObject.Count -gt 1 )
+	{
+		$OutputParameter = $OutputObject[0];
+	}
+	else
+	{
+		$OutputParameter = $OutputObject;
+	}
 }
 catch 
 {
@@ -198,8 +402,6 @@ END
 
 } # function
 
-if($MyInvocation.ScriptName) { Export-ModuleMember -Function New-Message; } 
-
 # 
 # Copyright 2014-2015 d-fens GmbH
 # 
@@ -219,8 +421,8 @@ if($MyInvocation.ScriptName) { Export-ModuleMember -Function New-Message; }
 # SIG # Begin signature block
 # MIIXDwYJKoZIhvcNAQcCoIIXADCCFvwCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUilUq6Wuux/x49w7I9aCUI+VW
-# xfCgghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU3QLnZQi9tH5Xzei8b/7/DTxT
+# aFWgghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
 # VzELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNV
 # BAsTB1Jvb3QgQ0ExGzAZBgNVBAMTEkdsb2JhbFNpZ24gUm9vdCBDQTAeFw0xMTA0
 # MTMxMDAwMDBaFw0yODAxMjgxMjAwMDBaMFIxCzAJBgNVBAYTAkJFMRkwFwYDVQQK
@@ -319,26 +521,26 @@ if($MyInvocation.ScriptName) { Export-ModuleMember -Function New-Message; }
 # MDAuBgNVBAMTJ0dsb2JhbFNpZ24gQ29kZVNpZ25pbmcgQ0EgLSBTSEEyNTYgLSBH
 # MgISESENFrJbjBGW0/5XyYYR5rrZMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEM
 # MQowCKACgAChAoAAMBkGCSqGSIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQB
-# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBTEYf2XoiyG3zvw
-# 3pebKHjwQl+CWjANBgkqhkiG9w0BAQEFAASCAQCpMxAcwN/PRwdnh9GEfUyqY+cg
-# ggoEBrTu6fkhZMJDBSjzdXF9PhReEOt3TqjlupO4Rph2r7zSP+beDh5GTpGsYODn
-# SBlGyNgA4KDydTeWViYxObNngHzHcNRtvIdPy86owmR72f/TJeqEyrlcwMC6Pbg3
-# E5Lnf3myPXJeViFXUsbN4nn0qks2nvET/yZ1CB4EpUYG733mcd9aqxuXEHg3L+5j
-# 3ExkpjOGQT5FDSGrmxv9KoVNByyePIucVwIhRdcekkldBkEvY0CT5jL6r40OLJxX
-# FjFYm06IHh7x4Lf3jzz4r1n3TlaAYLYFRQrLLoZGs92fp+kmrkAzTKeoaxeJoYIC
+# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBQXPEVMTFaFHfg9
+# rhceth77TWKwXDANBgkqhkiG9w0BAQEFAASCAQBBIrhQ7npSABdgyrl2IA+KjUFl
+# 3w+y/EZe+OygRq/4+JgQtoknlQz3YUTUNxaHUzCLpp7F9sdjKYeHksAar9K8zhf8
+# 00QVICR2MAj5leWUd703iz/9zQ3LV0EGWMt6PuBga20BknVsExmpXmg/AVEbSEt7
+# dpjq4Lhz6Vlmg3R50gpjHBcG5onJ+X9IbUumFWshKXcKS41ajna21UifhRbuJcBu
+# lRxgEj8PAAdgDnIEnUPELXolTiUOdiZ9BKxCWiuNSRNUcITVnfiejKqpLleyld2o
+# SCRIaViWXMNu2WLFUc8FQQcbog5jHahVE8+OPrvaSj0LSRAWI7ohJ2qyBXRwoYIC
 # ojCCAp4GCSqGSIb3DQEJBjGCAo8wggKLAgEBMGgwUjELMAkGA1UEBhMCQkUxGTAX
 # BgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGlt
 # ZXN0YW1waW5nIENBIC0gRzICEhEhBqCB0z/YeuWCTMFrUglOAzAJBgUrDgMCGgUA
 # oIH9MBgGCSqGSIb3DQEJAzELBgkqhkiG9w0BBwEwHAYJKoZIhvcNAQkFMQ8XDTE1
-# MTEwNDE0MzkxOFowIwYJKoZIhvcNAQkEMRYEFE5bYtTiIwUSX5Mdgq8IrmiWOL8C
+# MTExNjEwNTkwMVowIwYJKoZIhvcNAQkEMRYEFMHBzfJsH4UChGQ6m3GhwOmopy74
 # MIGdBgsqhkiG9w0BCRACDDGBjTCBijCBhzCBhAQUs2MItNTN7U/PvWa5Vfrjv7Es
 # KeYwbDBWpFQwUjELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYt
 # c2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGltZXN0YW1waW5nIENBIC0gRzICEhEh
-# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQAQuekRKtHSEjBiy7qt
-# 3k3pjKgt7rtCqRxR5o2u/y057xDOUqgclVjVlom8q+9Bdvqumvxe6WIKIMS9J5Yi
-# kjSOXxwgMWBDYI7iDdrYtNBKUiL91qYipGwYBlAI7T5mcIBXpMDBsGYSYxJZjyuc
-# FXV+t0OqACWsLkLFttLWjQXFz1gyoMVehOPW5VB66sVXC8ycF5cDLuPz6H7das74
-# m+XJJo3cU2kEadSO0HecVQAV0xbwp6/m2N564zlwMa/kqGJkXQRA/T6zFnEqpiZP
-# tIrKBFSOF5wo3EXTSLjbhA0nTRaAjYCcmblWRBgrUJms5IxDFUFp4glddRYa0yr6
-# elGC
+# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQBjwH4sglToty9SQXYd
+# m6Y10WdZ0Qs23gT3RBYpBquApe1dQj56SSYu5pOA6agFELaZh5fFg9zt5IUiDEAx
+# LOb7IapaU8c1wI/h3GUQnB0ZHIxkCNGpxAJRZWKclYMu494d3u5mw15va1wfAYio
+# ANuIiwWnYyWLuwI2IF3z2MT7BfUAzLmombcJKPq3e8m0dI0m59LysTcWf/jd3g6Z
+# e2lNEoKKhvjqirnGYJZ5u+68vsLdTAZtX16QyY/Gat7iMMuhZYXdt1H83ytEur/N
+# rAfouCyRgGy4Z5IawIsVTAqx6GMC/FmscFZ8UrSyoGzsz/Ruf3KdN5udeWNJqgnU
+# dGmR
 # SIG # End signature block

@@ -1,163 +1,26 @@
+# This file intentionally left blank
+
 #
-# Module manifest for module 'biz.dfch.PS.Azure.ServiceBus.Client'
-#
-
-@{
-
-# Script module or binary module file associated with this manifest.
-RootModule = 'biz.dfch.PS.Azure.ServiceBus.Client.psm1'
-
-# Version number of this module.
-ModuleVersion = '0.0.2.20151116'
-
-# ID used to uniquely identify this module
-GUID = '66c43abd-1389-4aba-9430-715de70dd329'
-
-# Author of this module
-Author = 'd-fens GmbH'
-
-# Company or vendor of this module
-CompanyName = 'd-fens GmbH'
-
-# Copyright statement for this module
-Copyright = '(c) 2015 d-fens GmbH. Distributed under Apache 2.0 license.'
-
-# Description of the functionality provided by this module
-# Description = 'Azure service bus client abstraction module for PowerShell automation'
-
-# Minimum version of the Windows PowerShell engine required by this module
-PowerShellVersion = '3.0'
-
-# Name of the Windows PowerShell host required by this module
-# PowerShellHostName = ''
-
-# Minimum version of the Windows PowerShell host required by this module
-# PowerShellHostVersion = ''
-
-# Minimum version of the .NET Framework required by this module
-DotNetFrameworkVersion = '4.0'
-
-# Minimum version of the common language runtime (CLR) required by this module
-# CLRVersion = ''
-
-# Processor architecture (None, X86, Amd64) required by this module
-# ProcessorArchitecture = ''
-
-# Modules that must be imported into the global environment prior to importing this module
-RequiredModules = @(
-	'biz.dfch.PS.System.Logging'
-	,
-	'biz.dfch.PS.System.Utilities'
-)
-
-# Assemblies that must be loaded prior to importing this module
-RequiredAssemblies = @(
-	'Microsoft.ServiceBus.dll'
-	,
-	'Microsoft.WindowsAzure.Configuration.dll'
-	,
-	'System.Net'
-	,
-	'System.Web'
-	,
-	'System.Web.Extensions'
-)
-
-# Script files (.ps1) that are run in the caller's environment prior to importing this module.
-ScriptsToProcess = @(
-	'Import-Module.ps1'
-)
-
-# ModuleToProcess = @()
-
-# Type files (.ps1xml) to be loaded when importing this module
-# TypesToProcess = @()
-
-# Format files (.ps1xml) to be loaded when importing this module
-# FormatsToProcess = @()
-
-# Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
-NestedModules = @(
-	'Enter-Server.ps1'
-	,
-	'Get-Message.ps1'
-	,
-	'Get-MessageBody.ps1'
-	,
-	'Get-MessageReceiver.ps1'
-	,
-	'Get-MessageSender.ps1'
-	,
-	'New-Message.ps1'
-	,
-	'New-MessageFacility.ps1'
-)
-
-# Functions to export from this module
-FunctionsToExport = '*'
-
-# Cmdlets to export from this module
-CmdletsToExport = '*'
-
-# Variables to export from this module
-VariablesToExport = '*'
-
-# Aliases to export from this module
-AliasesToExport = '*'
-
-# List of all modules packaged with this module.
-# ModuleList = @()
-
-# List of all files packaged with this module
-FileList = @(
-	'LICENSE'
-	,
-	'NOTICE'
-	,
-	'README.md'
-	,
-	'biz.dfch.PS.Azure.ServiceBus.Client.xml'
-	,
-	'Import-Module.ps1'
-	,
-	'Microsoft.ServiceBus.xml'
-)
-
-# Private data to pass to the module specified in RootModule/ModuleToProcess
-PrivateData = @{
-	"MODULEVAR" = "biz_dfch_PS_Azure_ServiceBus_Client"
-}
-
-# HelpInfo URI of this module
-HelpInfoURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
-
-# Default prefix for commands exported from this module. Override the default prefix using Import-Module -Prefix.
-DefaultCommandPrefix = 'SB'
-
-}
-
-# 
 # Copyright 2015 d-fens GmbH
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 # http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# 
-
+#
 
 # SIG # Begin signature block
 # MIIXDwYJKoZIhvcNAQcCoIIXADCCFvwCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUCnC21eVTdUftMC/TS68TnR3I
-# LXagghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUxYSSGDBuauk589wRQa9mOsDb
+# /UugghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
 # VzELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNV
 # BAsTB1Jvb3QgQ0ExGzAZBgNVBAMTEkdsb2JhbFNpZ24gUm9vdCBDQTAeFw0xMTA0
 # MTMxMDAwMDBaFw0yODAxMjgxMjAwMDBaMFIxCzAJBgNVBAYTAkJFMRkwFwYDVQQK
@@ -256,26 +119,26 @@ DefaultCommandPrefix = 'SB'
 # MDAuBgNVBAMTJ0dsb2JhbFNpZ24gQ29kZVNpZ25pbmcgQ0EgLSBTSEEyNTYgLSBH
 # MgISESENFrJbjBGW0/5XyYYR5rrZMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEM
 # MQowCKACgAChAoAAMBkGCSqGSIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQB
-# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBS9CHUglVIloyLm
-# JQ3xVa2f51Ib5TANBgkqhkiG9w0BAQEFAASCAQACw8CxJBxFKRNxoXMYi+1oRdiQ
-# cPatp9M3tbqrfDMmPd0cMWKtzbYDNtmCzjENAQ0Go9DL6iRs2hB2BemhhJCYz92+
-# jNPLY5JtowxvJuV2NGvj3+Ea+ORLuK/nDdmvrQXrDIa+BVRzkyA9T6EbwYGJKl5U
-# Lbpv267g+YJb/HI4T0VWWMq0qVA0jtY8ryPa42SgnKpTEBwr6QdKp6fyCjfX6q/C
-# ucIQ7fzSyhr6t3rkCxoIiPXLq9NAJVbp+7ux0O2ukcEdmYhd05w+D5HqjQewkw33
-# jkGz6aVcUjYRUzcL02owxKdx1landqvKh+4At6R0t/wrxd19mRaLc1s6pnIToYIC
+# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBTBhDiDGg1+2tXG
+# W1CaMajnolVNcTANBgkqhkiG9w0BAQEFAASCAQA6IqoJGL0LejPPGy2/JnswJApo
+# KXoFpFPM3cpSDUc24OFMfMRnwnCVWrjSuFVsRXMVKaj0Rs+P83zHxqqla8WGB9Vk
+# bvcCVT0R4ixP84y9xk92oSZLc4alfLEOULqfqTbeK7yKVDpsNO5WoaarXu7pGAEZ
+# OMA1XvWC1srJyTeg/KxVYAEFZULJ9kjwhO3oghLBqDl7bP+C7A5e+ndmOYPJowUk
+# AN0ubOEZb81WVCb0oq/Kav/N2v2szxENN/Y0cix5Xx9qjRwOd750yRDs673W9K8P
+# GMvuOX6TOqLpR3TxYMk2c6Qkd+YkvzjWoppRAniWJtCNcPDzMMZdZ0Mdys6noYIC
 # ojCCAp4GCSqGSIb3DQEJBjGCAo8wggKLAgEBMGgwUjELMAkGA1UEBhMCQkUxGTAX
 # BgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGlt
 # ZXN0YW1waW5nIENBIC0gRzICEhEhBqCB0z/YeuWCTMFrUglOAzAJBgUrDgMCGgUA
 # oIH9MBgGCSqGSIb3DQEJAzELBgkqhkiG9w0BBwEwHAYJKoZIhvcNAQkFMQ8XDTE1
-# MTExNjEwNTg1OFowIwYJKoZIhvcNAQkEMRYEFCSXTku3Bwufr2lMNcepMgUTHL+V
+# MTAyODE0MjA1MVowIwYJKoZIhvcNAQkEMRYEFJWHSVx2J2n0ni0D6yrsSY4/6sWy
 # MIGdBgsqhkiG9w0BCRACDDGBjTCBijCBhzCBhAQUs2MItNTN7U/PvWa5Vfrjv7Es
 # KeYwbDBWpFQwUjELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYt
 # c2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGltZXN0YW1waW5nIENBIC0gRzICEhEh
-# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQBxdAd4vY/gkT+Hmw6U
-# DtOKDlcJx7d94eOHY6dVVMUldy3y3mZiQsjV/PNgs5+EI/emjBfT6iE7RDPidgff
-# xheXIlc/qI/LnL6yomzHrIYzXhqzUx+iSIfJz+DCrrsCAnimfIYKhFfkq2/npc/e
-# EdXaBTIpRLsE4letBGVag4vllOx+Re7uf4UFsO9U3ic66fhTe5hDvkyZuSauiQ2O
-# QnVvIg5B5zEvBUbWIaiQMpQwKFZzsJfvazZVp3sBiVYxEmCQRkwiVJaLO2TcFFuw
-# //2hzM4ZVcPOTHgMD9CTlD+RyA62wT4seqGouC3T28zaxb3NP86Pzz7wSDKXiIDf
-# K8Eu
+# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQCbcKXeI4z6LLz7dV3E
+# zxllTTpeuo+4f4Xm/hyU8eQgwFKVLXpmsvfwnFUxMvPe6XzMEcazaiEu9LT4TVh1
+# 6+tkoU2ZM1bmuCp6RyaprY+2r+QefS39blUWYHc9weJpriSomHvIRrWoQBT1O6SV
+# ujJXdC/G8mxQVsTFg9zAaitjMh9CguOlSyj5Ob0bYZNCqqX9I4ZbzU2PNZIfpjwY
+# Ts8LVXP9Nu5URIWPwxpSs1NBmsvPZUG5Y1Tt+uVBg9+z4ncSKA8ccTLkn99Qfaij
+# Wob5T8zlCvaVtSEjlIMtOeXkDz6bG41bPzcsLwkOkaHXFjooFVuBL8nDisRWYla8
+# qhRm
 # SIG # End signature block

@@ -1,28 +1,37 @@
 function Get-Message {
 <#
 .SYNOPSIS
-Creates a message for the Service Bus Message Factory.
-
+Receives a message from a receiver client, which is based on the Service Bus Messaging Factory.
 
 .DESCRIPTION
-Creates a message for the Service Bus Message Factory.
-
+Receives a message from a receiver client, which is based on the Service Bus Messaging Factory.
 
 .OUTPUTS
-This Cmdlet returns the SequenceNumber from the MessageFactory Message object. On failure it returns $null.
-
+This Cmdlet returns the Messaging Factory message object. In case of failure is trying '-Retry' times, otherwise returns $null.
 
 .INPUTS
 See PARAMETER section for a description of input parameters.
 
+.EXAMPLE
+$message = Get-Message -BodyAsProperty;
+write-host $message.Properties['Body']
 
 .EXAMPLE
-$message = Get-Message;
-$message
+$message = Get-Message -ReceiveAndDelete;
 
-Creates a message for the Service Bus Message Factory and against server defined within module configuration xml file.
+.EXAMPLE
+$message = Get-Message -Receivemode 'PeekLock';
+...do something
+$message.Complete();
 
-	
+.EXAMPLE
+$message = Get-Message -Facility 'Topic-Newsletter' -EnsureFacility;
+
+.EXAMPLE
+$receiver = Get-MessageReceiver -Facility 'MyQueue1';
+$message = Get-Message -Client $receiver;
+
+Receives a message from a receiver client, which is based on the Service Bus Messaging Factory against server defined within module configuration xml file.
 #>
 [CmdletBinding(
 	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
@@ -30,33 +39,240 @@ Creates a message for the Service Bus Message Factory and against server defined
 [OutputType([Microsoft.ServiceBus.Messaging.BrokeredMessage])]
 Param 
 (
-	# [Optional] The MessageSequenceNumber for a deferred message.
-	[Parameter(Mandatory = $false, Position = 0)]
-	[ValidateNotNullorEmpty()]
-	[long] $MessageSequenceNumber
-	, 
 	# [Optional] The WaitTimeOutSec such as '3' Seconds for receiving a message before it times out. If you do not specify this 
 	# value it is taken from the default value = 3 sec.
-	[Parameter(Mandatory = $false, Position = 1)]
+	[Parameter(Mandatory = $false, Position = 0)]
 	[ValidateNotNullorEmpty()]
-	[int] $WaitTimeoutSec = 3
+	[int] $WaitTimeoutSec = [int]::MaxValue
 	, 
 	# [Optional] The Receivemode such as 'PeekLock'. If you do not specify this 
 	# value it is taken from the default parameter.
-	[Parameter(Mandatory = $false, Position = 2)]
+	[Parameter(Mandatory = $false, Position = 1)]
 	[ValidateSet('PeekLock', 'ReceiveAndDelete')]
-	[string] $Receivemode = 'PeekLock'
+	[string] $Receivemode = 'ReceiveAndDelete'
 	,
-	# [Optional] The QueueName such as 'MyQueue'. If you do not specify this 
-	# value it is taken from the module configuration file.
+	# [Optional] ReceiveAndDelete same as Receivemode 'ReceiveAndDelete'. If you do not specify this 
+	# value it is taken from the default parameter.
+	[Parameter(Mandatory = $false, Position = 2)]
+	[switch] $ReceiveAndDelete = $false
+	,
+	# [Optional] ReceiveAndComplete same as Receivemode 'PeekLock' and $Message.Complete(). If you do not specify this 
+	# value it is taken from the default parameter.
 	[Parameter(Mandatory = $false, Position = 3)]
+	[switch] $ReceiveAndComplete = $false
+	,
+	# [Optional] ReceiveAndAbandon same as Receivemode 'PeekLock' and $Message.Abandon(). If you do not specify this 
+	# value it is taken from the default parameter.
+	[Parameter(Mandatory = $false, Position = 4)]
+	[switch] $ReceiveAndAbandon = $false
+	,
+	# [Optional] BodyAsProperty writes the Message Body to Property 'Body'. If you do not specify this 
+	# value it is taken from the default parameter.
+	[Parameter(Mandatory = $false, Position = 5)]
+	[switch] $BodyAsProperty = $false
+	,
+	# [Optional] The Facility such as 'MyQueue'. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 6)]
 	[ValidateNotNullorEmpty()]
-	[string] $QueueName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultQueueName
+	[alias("queue")]
+	[alias("subscription")]
+	[alias("QueueName")]
+	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).ReceiveFacility
 	, 
+	# [Optional] Checks if facility existing
+	[Parameter(Mandatory = $false, Position = 7)]
+	[alias("ensure")]
+	[alias("broadcast")]
+	[alias("checkfacility")]
+	[switch]$EnsureFacility = $false
+	,
+	# [Optional] Messaging Client (instance of the MessagingFactory)
+	[Parameter(Mandatory = $false, Position = 8)]
+	[alias("MessageClient")]
+	$Client
+	,
 	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
 	# which to perform login. Default is credential as specified in the module 
 	# configuration file.
+	[Parameter(Mandatory = $false, Position = 9)]
+	[alias("cred")]
+	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
+	,
+	# [Optional] Skip retrying
+	[Parameter(Mandatory = $false, Position = 10)]
+	[switch]$NoRetry = $false
+	,
+	# [Optional] The Retry. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory=$false, Position = 11)]
+	[int]$Retry = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandRetry
+	,
+	# [Optional] The RetryInterval. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory=$false, Position = 12)]
+	[int]$RetryInterval = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandRetryInterval
+)
+
+BEGIN 
+{
+	$datBegin = [datetime]::Now;
+	[string] $fn = $MyInvocation.MyCommand.Name;
+	Log-Debug $fn ("CALL. Facility '{0}'; Username '{1}'" -f $Facility, $Credential.Username ) -fac 1;
+
+}
+# BEGIN 
+
+PROCESS 
+{
+
+	[boolean] $fReturn = $false;
+
+	# Get all parameters
+	$Params = @{};
+	$ParamsList = (Get-Command -Name $MyInvocation.InvocationName).Parameters;
+	foreach ($key in $ParamsList.keys)
+	{
+		$var = Get-Variable -Name $key -ErrorAction SilentlyContinue;
+		if($var)
+		{
+			if ( @('Retry', 'RetryInterval', 'NoRetry') -notcontains $($var.name) -and $var.value -ne $null -and $($var.value) -ne '' )  
+			{
+				$Params.Add($($var.name), $var.value);
+			}
+		}
+	}
+	Log-Debug $fn ("Operation [{0}] arguments: {1}" -f ($fn -replace 'Worker', ''), ($Params | Out-String));
+	
+	# Retry handling
+	for($c = 1; $c -le ($Retry+1); $c++)
+	{
+		try
+		{
+			$OutputParameter = Get-MessageWorker @Params;
+			break;
+		}
+		catch
+		{
+			# Throw last execption
+			if ( $NoRetry -or 
+				$c -gt $Retry -or 
+				$_.Exception.Message -match 'Connect to the message factory before using the Cmdlet.' 
+				)
+			{
+				if ($PSCmdlet.MyInvocation.BoundParameters["Debug"].IsPresent) 
+				{
+					throw;
+				}
+				else
+				{
+					break;
+				}	
+			}
+			Log-Debug $fn ("[{0}/{1}] Retrying operation [{2}]" -f $c, $Retry, ($fn -replace 'Worker', ''));
+			Start-Sleep -Seconds $RetryInterval;
+			$RetryInterval *= 2;
+			continue;
+		}
+	}
+	return $OutputParameter;
+	$fReturn = $true;
+
+}
+# PROCESS
+
+END 
+{
+	$datEnd = [datetime]::Now;
+	Log-Debug -fn $fn -msg ("RET. fReturn: [{0}]. Execution time: [{1}]ms. Started: [{2}]." -f $fReturn, ($datEnd - $datBegin).TotalMilliseconds, $datBegin.ToString('yyyy-MM-dd HH:mm:ss.fffzzz')) -fac 2;
+}
+# END
+
+} # function
+if($MyInvocation.ScriptName) { Export-ModuleMember -Function Get-Message; } 
+
+function Get-MessageWorker {
+<#
+.SYNOPSIS
+Receives a message from a receiver client, which is based on the Service Bus Messaging Factory.
+
+.DESCRIPTION
+Receives a message from a receiver client, which is based on the Service Bus Messaging Factory.
+
+.OUTPUTS
+This Cmdlet returns the MessageId from the Messaging Factory message object. On failure it returns $null.
+
+.INPUTS
+See PARAMETER section for a description of input parameters.
+
+.EXAMPLE
+$message = Get-MessageWorker;
+
+Receives a message from a receiver client, which is based on the Service Bus Messaging Factory.
+#>
+[CmdletBinding(
+	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
+)]
+[OutputType([Microsoft.ServiceBus.Messaging.BrokeredMessage])]
+Param 
+(
+	# [Optional] The WaitTimeOutSec such as '3' Seconds for receiving a message before it times out. If you do not specify this 
+	# value it is taken from the default value = 3 sec.
+	[Parameter(Mandatory = $false, Position = 0)]
+	[ValidateNotNullorEmpty()]
+	[int] $WaitTimeoutSec = [int]::MaxValue
+	, 
+	# [Optional] The Receivemode such as 'PeekLock'. If you do not specify this 
+	# value it is taken from the default parameter.
+	[Parameter(Mandatory = $false, Position = 1)]
+	[ValidateSet('PeekLock', 'ReceiveAndDelete')]
+	[string] $Receivemode = 'ReceiveAndDelete'
+	,
+	# [Optional] ReceiveAndDelete same as Receivemode 'ReceiveAndDelete'. If you do not specify this 
+	# value it is taken from the default parameter.
+	[Parameter(Mandatory = $false, Position = 2)]
+	[switch] $ReceiveAndDelete = $false
+	,
+	# [Optional] ReceiveAndComplete same as Receivemode 'PeekLock' and $Message.Complete(). If you do not specify this 
+	# value it is taken from the default parameter.
+	[Parameter(Mandatory = $false, Position = 3)]
+	[switch] $ReceiveAndComplete = $false
+	,
+	# [Optional] ReceiveAndAbandon same as Receivemode 'PeekLock' and $Message.Abandon(). If you do not specify this 
+	# value it is taken from the default parameter.
 	[Parameter(Mandatory = $false, Position = 4)]
+	[switch] $ReceiveAndAbandon = $false
+	,
+	# [Optional] BodyAsProperty writes the Message Body to Property 'Body'. If you do not specify this 
+	# value it is taken from the default parameter.
+	[Parameter(Mandatory = $false, Position = 5)]
+	[switch] $BodyAsProperty = $false
+	,
+	# [Optional] The Facility such as 'MyQueue'. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 6)]
+	[ValidateNotNullorEmpty()]
+	[alias("queue")]
+	[alias("subscription")]
+	[alias("QueueName")]
+	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).ReceiveFacility
+	, 
+	# [Optional] Checks if facility existing
+	[Parameter(Mandatory = $false, Position = 7)]
+	[alias("ensure")]
+	[alias("broadcast")]
+	[alias("checkfacility")]
+	[switch]$EnsureFacility = $false
+	,
+	# [Optional] Messaging Client (instance of the MessagingFactory)
+	[Parameter(Mandatory = $false, Position = 8)]
+	[alias("MessageClient")]
+	$Client
+	,
+	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
+	# which to perform login. Default is credential as specified in the module 
+	# configuration file.
+	[Parameter(Mandatory = $false, Position = 9)]
 	[alias("cred")]
 	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
 )
@@ -65,7 +281,7 @@ BEGIN
 {
 	$datBegin = [datetime]::Now;
 	[string] $fn = $MyInvocation.MyCommand.Name;
-	Log-Debug $fn ("CALL. QueueName '{0}'; Username '{1}'" -f $QueueName, $Credential.Username ) -fac 1;
+	Log-Debug $fn ("CALL. Facility '{0}'; Username '{1}'" -f $Facility, $Credential.Username ) -fac 1;
 
 }
 # BEGIN 
@@ -78,23 +294,90 @@ PROCESS
 try 
 {
 	# Parameter validation
-	# N/A
+	if ( $ReceiveAndDelete ) 
+	{
+		$Receivemode = 'ReceiveAndDelete';
+	}
 	
-	# Create MessageClient
-	try {
-		$MessageClient = New-MessageReceiver -QueueName $QueueName -Receivemode $Receivemode;
+	# Check facility
+	if ( $EnsureFacility ) 
+	{
+		$Path = ($Facility -Split "\\Subscriptions\\")[0];
+		$SubscriptionName = "RECV-{0}" -f (get-wmiobject Win32_ComputerSystemProduct  | Select-Object -ExpandProperty UUID).toString();
+		if ( $Facility -match "\\Subscriptions\\" )
+		{
+			$SubscriptionName = ($Facility -Split "\\Subscriptions\\")[1];
+		}
+		try 
+		{
+			$FacilitiyExists = New-MessageFacility -Path $Path -Name $SubscriptionName;
+			$Facility = '{0}\Subscriptions\{1}' -f $Path, $SubscriptionName;
+		} catch {
+			$msg = $_.Exception.Message;
+			Log-Error -msg $msg;
+			$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $Facility;
+			$PSCmdlet.ThrowTerminatingError($e);
+		}
+	}
+	
+	# Create Client
+	if ( !$PSBoundParameters.ContainsKey('Client') ) 
+	{
+		try 
+		{
+			$Client = Get-MessageReceiver -Facility $Facility -Receivemode $Receivemode;
+		} 
+		catch 
+		{
+			$msg = $_.Exception.Message;
+			$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $Client;
+			Log-Error $fn -msg $msg;
+			$PSCmdlet.ThrowTerminatingError($e);
+		}
+	}
+	
+	# Get Message
+	try 
+	{
+		# DFTODO - is this really an AMQP message when we are using the BrokeredMessage class?, see #5
+		[Microsoft.ServiceBus.Messaging.BrokeredMessage] $BrokeredMessage = $Client.Receive((New-TimeSpan -Seconds $WaitTimeoutSec));
 	} catch {
 		$msg = $_.Exception.Message;
-		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $MessageClient;
+		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $BrokeredMessage;
 		Log-Error $fn -msg $msg;
 		$PSCmdlet.ThrowTerminatingError($e);
 	}
 	
-	# Get Message
-	[Microsoft.ServiceBus.Messaging.BrokeredMessage] $BrokeredMessage = $MessageClient.Receive((New-TimeSpan -Seconds $WaitTimeoutSec));
+	# Process Message	
+	if ( $ReceiveAndAbandon -and $Receivemode -ne 'ReceiveAndDelete' ) 
+	{
+		$BrokeredMessage.Abandon();
+	}
+	
+	if ( $ReceiveAndComplete -and $Receivemode -ne 'ReceiveAndDelete' ) 
+	{
+		$BrokeredMessage.Complete();
+	}
+	
+	if ( $BodyAsProperty ) 
+	{
+		$PropertyName = 'Body';
+		$PropertyValue = Get-SBMessageBody $BrokeredMessage
+		if ( $BrokeredMessage.Properties.ContainsKey($PropertyName) -and $BrokeredMessage.Properties[$PropertyName].toString() -ne $PropertyValue.toString() ) 
+		{
+			[int] $PropertyCount = 1;
+			$PropertyName = ("Body{0}" -f $PropertyCount);
+			while( $BrokeredMessage.Properties.ContainsKey($PropertyName) )
+			{
+				$PropertyCount += 1;
+				$PropertyName = ("Body{0}" -f $PropertyCount);
+			}
+		}
+		$BrokeredMessage.Properties[$PropertyName] = $PropertyValue;
+	}
+	
 	$OutputParameter = $BrokeredMessage;
 	$fReturn = $true;
-
 }
 catch 
 {
@@ -154,8 +437,6 @@ END
 
 } # function
 
-if($MyInvocation.ScriptName) { Export-ModuleMember -Function Get-Message; } 
-
 # 
 # Copyright 2014-2015 d-fens GmbH
 # 
@@ -175,8 +456,8 @@ if($MyInvocation.ScriptName) { Export-ModuleMember -Function Get-Message; }
 # SIG # Begin signature block
 # MIIXDwYJKoZIhvcNAQcCoIIXADCCFvwCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUyQ9oPmAPCR9gIN7/6mzDIklU
-# YUCgghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU4JbjYuQxuwIHDgWCo7jZIyje
+# VvCgghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
 # VzELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNV
 # BAsTB1Jvb3QgQ0ExGzAZBgNVBAMTEkdsb2JhbFNpZ24gUm9vdCBDQTAeFw0xMTA0
 # MTMxMDAwMDBaFw0yODAxMjgxMjAwMDBaMFIxCzAJBgNVBAYTAkJFMRkwFwYDVQQK
@@ -275,26 +556,26 @@ if($MyInvocation.ScriptName) { Export-ModuleMember -Function Get-Message; }
 # MDAuBgNVBAMTJ0dsb2JhbFNpZ24gQ29kZVNpZ25pbmcgQ0EgLSBTSEEyNTYgLSBH
 # MgISESENFrJbjBGW0/5XyYYR5rrZMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEM
 # MQowCKACgAChAoAAMBkGCSqGSIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQB
-# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBR4PNZIZnPCem5v
-# z4SKcu4+8+WFvDANBgkqhkiG9w0BAQEFAASCAQDHEr0aFKD/qRQPxpXfsudEJ3ZJ
-# lQMUt2m4Lsy6eC2wwfEv4CPU85Y1gdRZmPF9Wb92RJVkZYfNi2eNuM869RzaMwX+
-# jv9ecPXSfZSdHywRL5KTa2E6tUlFqBQaMxOGuX2TfjB04NpjZo3aq8+kxy90vHpu
-# aXe/YBhc2X8oXkEFhRXQjANFSchhXwXUrYfBK6SFxkDBuse+E3jCzZFUfmAMXPh7
-# E/CmKXRGsKkuoc2d38JHFE5/zcn/leS0Djd+8IN47idQLwTAfB+rIV9UTljDEqM4
-# avInr5TuMR95IKOQRBldYwsXSOLzDAWmtKKTdDzla3E6xO+l20r+aCegrVphoYIC
+# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBQAnM8vxrJAqFbH
+# 1dns9HDB0ZtnLTANBgkqhkiG9w0BAQEFAASCAQBLwsIiygSKqpXNWcfriE7cAOz7
+# lrx1uZq0RJw2XxOvrjkxY+gASbH2bMWYvL1NrxC/DJe4DthebzKnWdFrdP5q7lAv
+# J4wymoLrcZ51qaV1j4D5F8ubLJugfFgQY5DsymqXHySVcZ01EgRwI+5oLAW/y8LQ
+# XHANyI+fW0uWKZtHSxNPnVBDisWvwm2HN9uMv+sCUEealGn69WF4uXrILhiBLtBT
+# M/l+CNZ3u7B+CgP/IhKsO1r+1P915j1sxg/aOoIqDDKpYLfc9eBBxB1ODWVKb0V/
+# A7TL9g4Swz9Ygfv2P/xsHNg5BpXTKw0qTU5hoaF4aNHColY3AweFEhX4CMdFoYIC
 # ojCCAp4GCSqGSIb3DQEJBjGCAo8wggKLAgEBMGgwUjELMAkGA1UEBhMCQkUxGTAX
 # BgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGlt
 # ZXN0YW1waW5nIENBIC0gRzICEhEhBqCB0z/YeuWCTMFrUglOAzAJBgUrDgMCGgUA
 # oIH9MBgGCSqGSIb3DQEJAzELBgkqhkiG9w0BBwEwHAYJKoZIhvcNAQkFMQ8XDTE1
-# MTEwNDE0MzkxNFowIwYJKoZIhvcNAQkEMRYEFIYYEArbT1a8IKjveSsn7qZEQtmV
+# MTExNjEwNTg1OVowIwYJKoZIhvcNAQkEMRYEFLgKFeFdaf6OfXFrx5CpNPEeuy0z
 # MIGdBgsqhkiG9w0BCRACDDGBjTCBijCBhzCBhAQUs2MItNTN7U/PvWa5Vfrjv7Es
 # KeYwbDBWpFQwUjELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYt
 # c2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGltZXN0YW1waW5nIENBIC0gRzICEhEh
-# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQAWcqDz/ye1cOSv+t6/
-# nIeypRVR1pBb0IZ2pnmqeVNvEcwymUcwQx5U6XZN/0aag1fjc1QGsJ9AKTn5z5xE
-# azkXEONgi4F88ubC2G29q2iNA0JEu+6AdCvcvOIdnv+1DQ8IE+1w2SKMHXjxU7QA
-# 20U91YER2y6BOiuXuSo1jTRsoxS5nyqeSUCtwgrkaIAbGZ4BjCJppFwvMByyaLjV
-# eaRagVSiLLvoXSQlWbckaWdmW13ws20OD0X919go2OeaH7m1YKVurBlqL/IVy35F
-# r426/+VK50mMGxYfXn7dzp4c0dT2Ptq2OjmrvqgiPP+oEb2aD7YVSZzALEUNWBuB
-# rBid
+# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQA2tIJNK1wr5qvgXCvV
+# 9z73Sqz+Svvlbh344YKEOaJvHkbuHSBErQhXoM5XCAD8i3qKSdpDo2Y0pN8ugBKB
+# Ok2Ir52nsSbnBwzAMxrdElaF6jDpbqiPw+aOf7h0jQlVpUr1OswB3xYLbV6/f+74
+# fzuW28hSP0GaGcU4zBZw6C/rUq4qR5tRDUfZtYXflhEuWrN601vqnxybxE8IlSey
+# PCaA+/tEakzeTwVwnBVuZX0XfjrZb2+bpvoiWI6K8ZkLe5bhiOIYD6WQdST5IOHc
+# kJHFo/cuiMaGZypt+5+PuiI4zjGcXG3+EYLpGrG392bzYnrp9go4zSDccwU2MXUy
+# nSmD
 # SIG # End signature block

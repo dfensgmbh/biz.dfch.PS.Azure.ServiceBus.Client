@@ -1,143 +1,179 @@
-#
-# Module manifest for module 'biz.dfch.PS.Azure.ServiceBus.Client'
-#
+function Get-MessageReceiver {
+<#
+.SYNOPSIS
+Get a message receiver to the Service Bus Message Factory.
 
-@{
 
-# Script module or binary module file associated with this manifest.
-RootModule = 'biz.dfch.PS.Azure.ServiceBus.Client.psm1'
+.DESCRIPTION
+Get a message receiver to the Service Bus Message Factory.
 
-# Version number of this module.
-ModuleVersion = '0.0.2.20151116'
 
-# ID used to uniquely identify this module
-GUID = '66c43abd-1389-4aba-9430-715de70dd329'
+.OUTPUTS
+This Cmdlet returns a SbmpMessageReceiver object with references to the MessageFactory of the application. On failure it returns $null.
 
-# Author of this module
-Author = 'd-fens GmbH'
 
-# Company or vendor of this module
-CompanyName = 'd-fens GmbH'
+.INPUTS
+See PARAMETER section for a description of input parameters.
 
-# Copyright statement for this module
-Copyright = '(c) 2015 d-fens GmbH. Distributed under Apache 2.0 license.'
 
-# Description of the functionality provided by this module
-# Description = 'Azure service bus client abstraction module for PowerShell automation'
+.EXAMPLE
+$receiver1 = Get-MessageReceiver -Facility 'MyQueue1';
+$receiver2 = Get-MessageReceiver -Facility 'MyQueue2';
+Get-Message -Client $receiver1;
+Get-Message -Client $receiver2;
 
-# Minimum version of the Windows PowerShell engine required by this module
-PowerShellVersion = '3.0'
+Get a message receiver to the Service Bus Message Factory with default credentials (current user) and against server defined within module configuration xml file.
 
-# Name of the Windows PowerShell host required by this module
-# PowerShellHostName = ''
 
-# Minimum version of the Windows PowerShell host required by this module
-# PowerShellHostVersion = ''
-
-# Minimum version of the .NET Framework required by this module
-DotNetFrameworkVersion = '4.0'
-
-# Minimum version of the common language runtime (CLR) required by this module
-# CLRVersion = ''
-
-# Processor architecture (None, X86, Amd64) required by this module
-# ProcessorArchitecture = ''
-
-# Modules that must be imported into the global environment prior to importing this module
-RequiredModules = @(
-	'biz.dfch.PS.System.Logging'
-	,
-	'biz.dfch.PS.System.Utilities'
+#>
+[CmdletBinding(
+	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
+)]
+[OutputType([Microsoft.ServiceBus.Messaging.MessageReceiver])]
+Param 
+(
+	# [Optional] The Message Factory. If you do not 
+	# specify this value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 0)]
+	[ValidateNotNullorEmpty()]
+	[alias("MessageFactory")]
+	$Factory = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory
+	, 
+	# [Optional] The Facility such as 'MyQueue'. If you do not specify this 
+	# value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 1)]
+	[ValidateNotNullorEmpty()]
+	[alias("queue")]
+	[alias("subscription")]
+	[alias("QueueName")]
+	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).ReceiveFacility
+	, 
+	# [Optional] The Receivemode such as 'PeekLock'. If you do not specify this 
+	# value it is taken from the default parameter.
+	[Parameter(Mandatory = $false, Position = 2)]
+	[ValidateSet('PeekLock', 'ReceiveAndDelete')]
+	[string] $Receivemode = 'ReceiveAndDelete'
 )
 
-# Assemblies that must be loaded prior to importing this module
-RequiredAssemblies = @(
-	'Microsoft.ServiceBus.dll'
-	,
-	'Microsoft.WindowsAzure.Configuration.dll'
-	,
-	'System.Net'
-	,
-	'System.Web'
-	,
-	'System.Web.Extensions'
-)
-
-# Script files (.ps1) that are run in the caller's environment prior to importing this module.
-ScriptsToProcess = @(
-	'Import-Module.ps1'
-)
-
-# ModuleToProcess = @()
-
-# Type files (.ps1xml) to be loaded when importing this module
-# TypesToProcess = @()
-
-# Format files (.ps1xml) to be loaded when importing this module
-# FormatsToProcess = @()
-
-# Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
-NestedModules = @(
-	'Enter-Server.ps1'
-	,
-	'Get-Message.ps1'
-	,
-	'Get-MessageBody.ps1'
-	,
-	'Get-MessageReceiver.ps1'
-	,
-	'Get-MessageSender.ps1'
-	,
-	'New-Message.ps1'
-	,
-	'New-MessageFacility.ps1'
-)
-
-# Functions to export from this module
-FunctionsToExport = '*'
-
-# Cmdlets to export from this module
-CmdletsToExport = '*'
-
-# Variables to export from this module
-VariablesToExport = '*'
-
-# Aliases to export from this module
-AliasesToExport = '*'
-
-# List of all modules packaged with this module.
-# ModuleList = @()
-
-# List of all files packaged with this module
-FileList = @(
-	'LICENSE'
-	,
-	'NOTICE'
-	,
-	'README.md'
-	,
-	'biz.dfch.PS.Azure.ServiceBus.Client.xml'
-	,
-	'Import-Module.ps1'
-	,
-	'Microsoft.ServiceBus.xml'
-)
-
-# Private data to pass to the module specified in RootModule/ModuleToProcess
-PrivateData = @{
-	"MODULEVAR" = "biz_dfch_PS_Azure_ServiceBus_Client"
+BEGIN 
+{
+	$datBegin = [datetime]::Now;
+	[string] $fn = $MyInvocation.MyCommand.Name;
+	Log-Debug $fn ("CALL. MessageFactory Endpoint '{0}'; Facility '{1}'" -f $Factory.Address.AbsolutePath, $Facility ) -fac 1;
+	
+	# Check message factory connection
+	if ( $Factory -isnot [Microsoft.ServiceBus.Messaging.MessagingFactory] ) 
+	{
+		$msg = "Factory: Parameter validation FAILED. Connect to the message factory before using the Cmdlet.";
+		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $Factory;
+		$PSCmdlet.ThrowTerminatingError($e);
+	}
+	
+	# Check message factory status
+	if ( $Factory.IsClosed ) 
+	{
+		Log-Info $fn ("MessageFactory Endpoint '{0}' is closed -> reconnect" -f $Factory.Address.AbsolutePath, $Facility, $Credential.Username ) -fac 1;
+		[Microsoft.ServiceBus.Messaging.MessagingFactory] $Factory = Enter-ServiceBus -EndpointServerName $Factory.Address.Host -RuntimePort $Factory.Address.Port -Namespace $Factory.Address.Segments[-1];
+	}
 }
+# BEGIN 
 
-# HelpInfo URI of this module
-HelpInfoURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
+PROCESS 
+{
 
-# Default prefix for commands exported from this module. Override the default prefix using Import-Module -Prefix.
-DefaultCommandPrefix = 'SB'
+[boolean] $fReturn = $false;
+
+try 
+{
+	# Parameter validation
+	# N/A
+
+	# Get message client
+	[Microsoft.ServiceBus.Messaging.MessageReceiver] $Client = $null;
+	# Get message client from global
+	if ( (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client -is [Microsoft.ServiceBus.Messaging.MessageReceiver] ) 
+	{
+		if ( !(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client.IsClosed -and 
+		(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client.Path -eq $Facility -and 
+		(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client.Mode -eq $Receivemode ) 
+		{
+			[Microsoft.ServiceBus.Messaging.MessageReceiver] $Client = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client;
+		}
+	}
+
+	# Create message client
+	if ( $Client -eq $null ) 
+	{
+		[Microsoft.ServiceBus.Messaging.MessageReceiver] $Client = $Factory.CreateMessageReceiver($Facility, [Microsoft.ServiceBus.Messaging.ReceiveMode]::$ReceiveMode);
+	}
+	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Client = $Client;
+	
+	$OutputParameter = $Client;
+	$fReturn = $true;
 
 }
+catch 
+{
+	if($gotoSuccess -eq $_.Exception.Message) 
+	{
+			$fReturn = $true;
+	} 
+	else 
+	{
+		[string] $ErrorText = "catch [$($_.FullyQualifiedErrorId)]";
+		$ErrorText += (($_ | fl * -Force) | Out-String);
+		$ErrorText += (($_.Exception | fl * -Force) | Out-String);
+		$ErrorText += (Get-PSCallStack | Out-String);
+		
+		if($_.Exception -is [System.Net.WebException]) 
+		{
+			Log-Critical $fn "Login to Uri '$Uri' with Username '$Username' FAILED [$_].";
+			Log-Debug $fn $ErrorText -fac 3;
+		}
+		else 
+		{
+			Log-Error $fn $ErrorText -fac 3;
+			if($gotoError -eq $_.Exception.Message) 
+			{
+				Log-Error $fn $e.Exception.Message;
+				$PSCmdlet.ThrowTerminatingError($e);
+			} 
+			elseif($gotoFailure -ne $_.Exception.Message) 
+			{ 
+				Write-Verbose ("$fn`n$ErrorText"); 
+			} 
+			else 
+			{
+				# N/A
+			}
+		}
+		$fReturn = $false;
+		$OutputParameter = $null;
+	}
+}
+finally 
+{
+	# Clean up
+	# N/A
+}
+return $OutputParameter;
+
+}
+# PROCESS
+
+END 
+{
+	$datEnd = [datetime]::Now;
+	Log-Debug -fn $fn -msg ("RET. fReturn: [{0}]. Execution time: [{1}]ms. Started: [{2}]." -f $fReturn, ($datEnd - $datBegin).TotalMilliseconds, $datBegin.ToString('yyyy-MM-dd HH:mm:ss.fffzzz')) -fac 2;
+}
+# END
+
+} # function
+
+if($MyInvocation.ScriptName) { Export-ModuleMember -Function Get-MessageReceiver; } 
 
 # 
-# Copyright 2015 d-fens GmbH
+# Copyright 2014-2015 d-fens GmbH
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -152,12 +188,11 @@ DefaultCommandPrefix = 'SB'
 # limitations under the License.
 # 
 
-
 # SIG # Begin signature block
 # MIIXDwYJKoZIhvcNAQcCoIIXADCCFvwCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUCnC21eVTdUftMC/TS68TnR3I
-# LXagghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUUWZ1ddVVl1DUQ8hYSMpRkUke
+# xeagghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
 # VzELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNV
 # BAsTB1Jvb3QgQ0ExGzAZBgNVBAMTEkdsb2JhbFNpZ24gUm9vdCBDQTAeFw0xMTA0
 # MTMxMDAwMDBaFw0yODAxMjgxMjAwMDBaMFIxCzAJBgNVBAYTAkJFMRkwFwYDVQQK
@@ -256,26 +291,26 @@ DefaultCommandPrefix = 'SB'
 # MDAuBgNVBAMTJ0dsb2JhbFNpZ24gQ29kZVNpZ25pbmcgQ0EgLSBTSEEyNTYgLSBH
 # MgISESENFrJbjBGW0/5XyYYR5rrZMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEM
 # MQowCKACgAChAoAAMBkGCSqGSIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQB
-# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBS9CHUglVIloyLm
-# JQ3xVa2f51Ib5TANBgkqhkiG9w0BAQEFAASCAQACw8CxJBxFKRNxoXMYi+1oRdiQ
-# cPatp9M3tbqrfDMmPd0cMWKtzbYDNtmCzjENAQ0Go9DL6iRs2hB2BemhhJCYz92+
-# jNPLY5JtowxvJuV2NGvj3+Ea+ORLuK/nDdmvrQXrDIa+BVRzkyA9T6EbwYGJKl5U
-# Lbpv267g+YJb/HI4T0VWWMq0qVA0jtY8ryPa42SgnKpTEBwr6QdKp6fyCjfX6q/C
-# ucIQ7fzSyhr6t3rkCxoIiPXLq9NAJVbp+7ux0O2ukcEdmYhd05w+D5HqjQewkw33
-# jkGz6aVcUjYRUzcL02owxKdx1landqvKh+4At6R0t/wrxd19mRaLc1s6pnIToYIC
+# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBRfTyHdW2SH2DW4
+# EwzAQxFDXUmUSTANBgkqhkiG9w0BAQEFAASCAQCV+br07cDvTQmxLEp46aaY0JJ/
+# EZrYyLSZehpT/hnQ37/9vo7dleYO0rtT93uLTaSeiQE/XVQ9NZlF7cG8xe0xwljU
+# UrFlzkI1e0BvXzvCrGEJ/PbsfbKNKRV3/6xOk2WQTSV7W8guRbq2Af6+Uwx6GWeX
+# E3PrAZFYaGlus50pdZ+b1K94+Fko49VQHwwjq5AKSqRgR4fDLIHKUaDnHxBrnNc0
+# ALYh39HQVZQpJ7xbWZ6q+SqVQ8tiF5i9yNeJYj6jDpgOlkdMyTw57edJYeB/Hl74
+# tVOpfqMPjDInq3vdz1oNv5yCkBD/l61Oy9BYb04TR8+Zd+RY79DBVijLMK7koYIC
 # ojCCAp4GCSqGSIb3DQEJBjGCAo8wggKLAgEBMGgwUjELMAkGA1UEBhMCQkUxGTAX
 # BgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGlt
 # ZXN0YW1waW5nIENBIC0gRzICEhEhBqCB0z/YeuWCTMFrUglOAzAJBgUrDgMCGgUA
 # oIH9MBgGCSqGSIb3DQEJAzELBgkqhkiG9w0BBwEwHAYJKoZIhvcNAQkFMQ8XDTE1
-# MTExNjEwNTg1OFowIwYJKoZIhvcNAQkEMRYEFCSXTku3Bwufr2lMNcepMgUTHL+V
+# MTExNjEwNTkwMFowIwYJKoZIhvcNAQkEMRYEFPcj2Xs/BEViiJ14b5CWdyhmKdOU
 # MIGdBgsqhkiG9w0BCRACDDGBjTCBijCBhzCBhAQUs2MItNTN7U/PvWa5Vfrjv7Es
 # KeYwbDBWpFQwUjELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYt
 # c2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGltZXN0YW1waW5nIENBIC0gRzICEhEh
-# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQBxdAd4vY/gkT+Hmw6U
-# DtOKDlcJx7d94eOHY6dVVMUldy3y3mZiQsjV/PNgs5+EI/emjBfT6iE7RDPidgff
-# xheXIlc/qI/LnL6yomzHrIYzXhqzUx+iSIfJz+DCrrsCAnimfIYKhFfkq2/npc/e
-# EdXaBTIpRLsE4letBGVag4vllOx+Re7uf4UFsO9U3ic66fhTe5hDvkyZuSauiQ2O
-# QnVvIg5B5zEvBUbWIaiQMpQwKFZzsJfvazZVp3sBiVYxEmCQRkwiVJaLO2TcFFuw
-# //2hzM4ZVcPOTHgMD9CTlD+RyA62wT4seqGouC3T28zaxb3NP86Pzz7wSDKXiIDf
-# K8Eu
+# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQCeLd3G5tD42FtFZ2tY
+# DPXCYTRixN+AX2AUUvsN2PsXmkjSdhRwHp3a15smmvz0+RdKVOrZBto0iVq/8DXu
+# JN3YIxUz0wwd18q8ChZeUZhunAAzvpUOINMfpF+v0o8ykdsyfTbtYhO+MlVgfihn
+# VTPJuNMuY0KVILyVhhBKA07K0G3XYDs6G6NuG8DXqSIVhBHgzxUtLiEjRbRVjlek
+# MNYrbllhBBBGTMRnKHYUCIZPVA3EGTHWhig7Zy52jjeoT/M6xL82Mu14bXD7ds8z
+# 0S2mBxBMdvB+FYJa/hA5xLtFMw76x/SB5gJ4xqZUpmUF4GyritiZony2/fjvVb1d
+# TLN9
 # SIG # End signature block

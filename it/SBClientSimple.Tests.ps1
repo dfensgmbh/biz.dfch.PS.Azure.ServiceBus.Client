@@ -1,177 +1,199 @@
-function Enter-ServiceBus {
-<#
-.SYNOPSIS
-Performs a login to the Service Bus Message Factory.
+$here = Split-Path -Parent $MyInvocation.MyCommand.Path
+$sut = (Split-Path -Leaf $MyInvocation.MyCommand.Path).Replace(".Tests.", ".")
 
-
-.DESCRIPTION
-Performs a login to the Service Bus Message Factory.
-
-This is the first Cmdlet to be executed and required for all other Cmdlets of this module. It creates service references to the routers of the application.
-
-
-.OUTPUTS
-This Cmdlet returns a SbmpMessagingFactory object with references to the MessageFactory of the application. On failure it returns $null.
-
-
-.INPUTS
-See PARAMETER section for a description of input parameters.
-
-
-.EXAMPLE
-$svc = Enter-ServiceBus;
-$svc
-
-Performs a login to the Service Bus Message Factory with default credentials (current user) and against server defined within module configuration xml file.
-
-
-#>
-[CmdletBinding(
-	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
-)]
-[OutputType([Microsoft.ServiceBus.Messaging.MessagingFactory])]
-Param 
-(
-	# [Optional] The EndpointServerName such as 'localhost'. If you do not 
-	# specify this value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 0)]
-	[ValidateNotNullorEmpty()]
-	[string] $EndpointServerName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).EndpointServerName
-	, 
-	# [Optional] The RuntimePort such as '123'. If you do not specify this 
-	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 1)]
-	[int] $RuntimePort = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).RuntimePort
-	, 
-	# [Optional] The ManagementPort such as '123'. If you do not specify this 
-	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 2)]
-	[int] $ManagementPort = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).ManagementPort	
-	,
-	# [Optional] The Namespace such as 'ServiceBusDefaultNamespace'. If you do not specify this 
-	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 3)]
-	[string] $Namespace = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).DefaultNameSpace
-	, 
-	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
-	# which to perform login. Default is credential as specified in the module 
-	# configuration file.
-	[Parameter(Mandatory = $false, Position = 4)]
-	[alias("cred")]
-	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
-)
-
-BEGIN 
+function Stop-Pester($message = "EMERGENCY: Script cannot continue.")
 {
-	$datBegin = [datetime]::Now;
-	[string] $fn = $MyInvocation.MyCommand.Name;
-	Log-Debug $fn ("CALL. EndpointServerName '{0}'; RuntimePort '{1}'; Namespace '{2}'; Username '{3}'" -f $EndpointServerName, $RuntimePort, $Namespace, $Credential.Username ) -fac 1;
+	$msg = $message;
+	$e = New-CustomErrorRecord -msg $msg -cat OperationStopped -o $msg;
+	$PSCmdlet.ThrowTerminatingError($e);
 }
-# BEGIN 
 
-PROCESS 
-{
+Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 
-[boolean] $fReturn = $false;
-
-try 
-{
-	# Parameter validation
-	# N/A
+	Mock Export-ModuleMember { return $null; }
 	
-	# Prepare connection string
-	$ConnectionString = 'Endpoint=sb://{0}/{1};StsEndpoint=https://{0}:{3}/{1};RuntimePort={2};ManagementPort={3}' -f $EndpointServerName, $Namespace, $RuntimePort, $ManagementPort;
+	. "$here\$sut"
 	
-	# Create message factory
-	(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageFactory = [Microsoft.ServiceBus.Messaging.MessagingFactory]::CreateFromConnectionString($ConnectionString);
-	
-	$OutputParameter = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).MessageFactory;
-	$fReturn = $true;
-
-}
-catch 
-{
-	if($gotoSuccess -eq $_.Exception.Message) 
-	{
-			$fReturn = $true;
-	} 
-	else 
-	{
-		[string] $ErrorText = "catch [$($_.FullyQualifiedErrorId)]";
-		$ErrorText += (($_ | fl * -Force) | Out-String);
-		$ErrorText += (($_.Exception | fl * -Force) | Out-String);
-		$ErrorText += (Get-PSCallStack | Out-String);
+	Context "SBClientSimple.Tests" {
 		
-		if($_.Exception -is [System.Net.WebException]) 
-		{
-			Log-Critical $fn "Login to Uri '$Uri' with Username '$Username' FAILED [$_].";
-			Log-Debug $fn $ErrorText -fac 3;
+		BeforeEach {
+			# Import management module for service bus - required to create, check and delete queues/topis/subscriptions
+			$moduleName = 'biz.dfch.PS.Azure.ServiceBus.Management';
+			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
+			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Management -ErrorAction:SilentlyContinue;
+			Import-Module $moduleName -ErrorAction:SilentlyContinue;
+			
+			# Import client module for service bus - required to send and receive messages
+			$moduleName = "biz.dfch.PS.Azure.ServiceBus.Client";			
+			Remove-Module $moduleName -ErrorAction:SilentlyContinue;
+			Remove-Variable biz_dfch_PS_Azure_ServiceBus_Client -ErrorAction:SilentlyContinue;
+			Import-Module $moduleName -ErrorAction:SilentlyContinue -Force;
+			
+			# Set variable to the loacal environment
+			$biz_dfch_PS_Azure_ServiceBus_Client.EndpointServerName = (Get-SBFarm).Hosts[0].Name;
+			$biz_dfch_PS_Azure_ServiceBus_Client.NameSpace = (Get-SBNamespace).Name;
+			$biz_dfch_PS_Azure_ServiceBus_Management.DefaultNameSpace = $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace;
+			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKeyName = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).KeyName;
+			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).PrimaryKey;
+			
+			# Create Topic
+			$guid = [guid]::NewGuid().Guid;
+			$topicName = "Pester-{0}" -f $guid;
+			New-SBTopic -Path $topicName;
+			
+			# Enter Servicebus
+			$enterSBServer = Enter-SBServer;
 		}
-		else 
-		{
-			Log-Error $fn $ErrorText -fac 3;
-			if($gotoError -eq $_.Exception.Message) 
+		
+		AfterEach {
+			#Cleanup
+			Remove-SBTopic -Path $topicName -force;
+		}
+		
+		It "SBClientSimple-NamespaceIsAviable" {
+			# Arrange
+			$absoluteUri = "sb://"+$biz_dfch_PS_Azure_ServiceBus_Client.EndpointServerName+":5671/"+$biz_dfch_PS_Azure_ServiceBus_Client.NameSpace;
+			
+			# Act
+			
+			# Assert
+			$enterSBServer.Address.AbsoluteUri | Should Be $absoluteUri; #sb://win-8a036g6jvpj:5671/ServiceBusDefaultNamespace"
+		}
+		
+		It "SBClientSimple-CreateMessageIncreaseSubscriptionMessageCount" -Test {
+			<#
+				GIVEN there are multiple senders S1 and S2
+				  AND there is a message sink MS1
+				  AND this sink is in *SINGLECAST* mode
+				  AND this sink contains no message
+				  AND no receiver is available
+				WHEN S1 sends messages M10, M11, M14
+				  AND S2 send messages M12, M13, M15
+				THEN the amount of message in the sink is 6
+			#>
+				
+			# Arrange
+			$messageText = 'Pester-Test-Message';
+			$guid = [guid]::NewGuid().Guid;
+			$subscriptionName = 'Pester-{0}' -f $guid;
+			
+			# Arrange test parameter
+			$receiveMode = 'PeekLock';
+			$amountMessageSender = 2;
+			$messageAmount = 6;
+			
+			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
+			$subscriptionNew = New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
+			
+			$messageSenders = New-Object System.Collections.ArrayList;
+			for ($i=1; $i -le $amountMessageSender; $i++) 
 			{
-				Log-Error $fn $e.Exception.Message;
-				$PSCmdlet.ThrowTerminatingError($e);
-			} 
-			elseif($gotoFailure -ne $_.Exception.Message) 
-			{ 
-				Write-Verbose ("$fn`n$ErrorText"); 
-			} 
-			else 
-			{
-				# N/A
+				$messageSenderNew = Get-SBMessageSender -Facility $topicName;
+				$messageSenders.Add($messageSenderNew);
 			}
+
+			# Act Send Message
+			$messageIds = New-Object System.Collections.ArrayList;
+			for ($i=1; $i -le $messageAmount; $i++) 
+			{
+				if ($amountMessageSender -eq $amountMessageSender) 
+				{
+					$numberOfSender = 1;
+				} 
+				else 
+				{
+					$numberOfSender++;
+				}
+				$messageIdNew = New-SBMessage $messageText -Facility $topicName -MessageClient $messageSenders[$numberOfSender];
+				$messageIds.Add($messageIdNew);
+			}
+			
+			$subscription = Get-SBSubscriptions -TopicPath $topicName;
+			
+			# Assert
+			$subscription.MessageCount | Should Be $messageAmount;
 		}
-		$fReturn = $false;
-		$OutputParameter = $null;
+		
+		It "SBClientSimple-GetSimplyMessage" -Test {
+			# Arrange
+			$messageText = 'Pester-Test-Message';
+			
+			$guid = [guid]::NewGuid().Guid;
+			$subscriptionName = 'Pester-{0}' -f $guid;
+			$subscriptionNew = New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
+			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
+			# Act			
+			$newSBMessage = New-SBMessage $messageText -Facility $topicName;
+			$getSBMessage = Get-SBMessage -BodyAsProperty -Facility $subscriptionPath -ReceiveMode 'ReceiveAndDelete';
+			
+			# Assert 
+			$newSBMessage | Should Not Be $null;
+			$getSBMessage.MessageId | Should Be $newSBMessage;
+		}
+		
+		It "SBClientSimple-GetMessagePeekLockMessageIsStillInSubscription" -Test {
+			# Arrange
+			$messageText = 'Pester-Test-Message';
+			
+			$guid = [guid]::NewGuid().Guid;
+			$subscriptionName = 'Pester-{0}' -f $guid;
+			$subscriptionNew = New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
+			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
+			# Act			
+			$newSBMessage = New-SBMessage $messageText -Facility $topicName;
+			
+			# Assert 
+			$getSBMessage = Get-SBMessage -BodyAsProperty -Facility $subscriptionPath -ReceiveMode 'PeekLock';
+			$newSBMessage | Should Not Be $null;
+			$getSBMessage.Properties['Body'] | Should Be $messageText;
+			
+			$subscription = Get-SBSubscriptions -TopicPath $topicName;
+			$subscription.MessageCount | Should Be 1;
+		}
+		
+		It "SBClientSimple-GetMessageReceiveAndDeleteSubscriptionIsEmpty" -Test {
+			# Arrange
+			$messageText = 'Pester-Test-Message';
+			
+			$guid = [guid]::NewGuid().Guid;
+			$subscriptionName = 'Pester-{0}' -f $guid;
+			$subscriptionNew = New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
+			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
+			# Act			
+			$newSBMessage = New-SBMessage $messageText -Facility $topicName;
+			
+			# Assert 
+			$getSBMessage = Get-SBMessage -BodyAsProperty -Facility $subscriptionPath -ReceiveMode 'ReceiveAndDelete';
+			$newSBMessage | Should Not Be $null;
+			$getSBMessage.Properties['Body'] | Should Be $messageText;
+			
+			$subscription = Get-SBSubscriptions -TopicPath $topicName;
+			$subscription.MessageCount | Should Be 0;
+		}
 	}
 }
-finally 
-{
-	# Clean up
-	# N/A
-}
-return $OutputParameter;
 
-}
-# PROCESS
-
-END 
-{
-	$datEnd = [datetime]::Now;
-	Log-Debug -fn $fn -msg ("RET. fReturn: [{0}]. Execution time: [{1}]ms. Started: [{2}]." -f $fReturn, ($datEnd - $datBegin).TotalMilliseconds, $datBegin.ToString('yyyy-MM-dd HH:mm:ss.fffzzz')) -fac 2;
-}
-# END
-
-} # function
-
-Set-Alias -Name Connect- -Value 'Enter-ServiceBus';
-Set-Alias -Name Enter- -Value 'Enter-ServiceBus';
-if($MyInvocation.ScriptName) { Export-ModuleMember -Function Enter-ServiceBus -Alias Connect-, Enter-; } 
-
-# 
-# Copyright 2014-2015 d-fens GmbH
-# 
+#
+# Copyright 2015 d-fens GmbH
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 # http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# 
+#
 
 # SIG # Begin signature block
 # MIIXDwYJKoZIhvcNAQcCoIIXADCCFvwCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUUYyC1L4ec0JayxuRmGeuCcjG
-# OFmgghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUZX5w8Xw+udMvWl6nNjqlG7YQ
+# 2tugghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
 # VzELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNV
 # BAsTB1Jvb3QgQ0ExGzAZBgNVBAMTEkdsb2JhbFNpZ24gUm9vdCBDQTAeFw0xMTA0
 # MTMxMDAwMDBaFw0yODAxMjgxMjAwMDBaMFIxCzAJBgNVBAYTAkJFMRkwFwYDVQQK
@@ -270,26 +292,26 @@ if($MyInvocation.ScriptName) { Export-ModuleMember -Function Enter-ServiceBus -A
 # MDAuBgNVBAMTJ0dsb2JhbFNpZ24gQ29kZVNpZ25pbmcgQ0EgLSBTSEEyNTYgLSBH
 # MgISESENFrJbjBGW0/5XyYYR5rrZMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEM
 # MQowCKACgAChAoAAMBkGCSqGSIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQB
-# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBRLjw8wOMicqPhV
-# KP33X8CyCi5uoTANBgkqhkiG9w0BAQEFAASCAQAXFCVLVhcgvVVglU116oHmjsjm
-# tcsxD/W+pbh5Mz+SF+xHYpbEHlw1s8ykMzhqyVZhOhNq5dprz/bUEoXoMB6Vno2G
-# Vqfj+5dk82jm9xL5RY5g91ZxBuQia4EUiK+Z4igePn4I/+RWTZZ7W5OPRyOnuW8t
-# VY3VZg0KB8n05BPj0AtoURb3+Pbmhe7ObSB4UljrAOCNaj1PEuMomSltO8IhJsI4
-# TRlMexRPfgzDuqYxy+2UtG7L8a17GmFRj0fPCSoHpWM3Z3QVcSeJ0jbmqy9j9G0g
-# gJ3ONazQsDIGjOwIYr/w6YhJ/8mjJ+Mv0DWk36K+qa+5/wjsDh2A+ynBa4MjoYIC
+# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBTw3JlKeHQiw2lA
+# 2iJee4jfe1ok0zANBgkqhkiG9w0BAQEFAASCAQDBSK+A2XFr+NaI3FLcxOBVbQU/
+# aMfGJGwzAABNVWoanByc8XE6MuZ+5yXdvdeXZITHAFxrwRe7R2N6+5EcjQGWAzJi
+# HyKTZ2T5tFXBi9qJPTTKytbdYtMOJeWClr9v15iHJcOjaba4IWFxcX7n3k7fspI2
+# +ePobEIdGl7kSNMNEd8e3GgIN2EUUu6xkOPycP0Alw4oMsd+E+RV2qJyGn6ukIoW
+# +WoPCtFySmIH9vI7xP5F7T0nl1csaJtj00eSu7qREwUdefszhqDyadKmDCLus1bS
+# dSnSktG5UuVndbfFJXlssxRC4cPsvtedToZteJ08p/FWbvOZ9tQMESSZkklmoYIC
 # ojCCAp4GCSqGSIb3DQEJBjGCAo8wggKLAgEBMGgwUjELMAkGA1UEBhMCQkUxGTAX
 # BgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGlt
 # ZXN0YW1waW5nIENBIC0gRzICEhEhBqCB0z/YeuWCTMFrUglOAzAJBgUrDgMCGgUA
 # oIH9MBgGCSqGSIb3DQEJAzELBgkqhkiG9w0BBwEwHAYJKoZIhvcNAQkFMQ8XDTE1
-# MTEwNDE0MzkxM1owIwYJKoZIhvcNAQkEMRYEFEBc/y6xBsuKvsagN1/YUS1ox1+C
+# MTAyODE0MjA0NlowIwYJKoZIhvcNAQkEMRYEFPKGbdv4mF14VLiWolIKpcIGtFoF
 # MIGdBgsqhkiG9w0BCRACDDGBjTCBijCBhzCBhAQUs2MItNTN7U/PvWa5Vfrjv7Es
 # KeYwbDBWpFQwUjELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYt
 # c2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGltZXN0YW1waW5nIENBIC0gRzICEhEh
-# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQAb3bY//rggdEKm1hQj
-# 8ZM7RChuUQM3MOMnRw2p8V4ShbXH4iHaR9rI7LVf3J76X5uy+DgV0hQJ5ryfNvtQ
-# +eKxab/XZK4nJMScCrkxtA6E+moCksoXFDM2BoazaebC9kzJAOM+b5Cyu5yFxT2r
-# UfHdvI9wu1E3Qnx4umh6okcslQ5ZzSySvfUR7k64vILtGPCT6ghclXFAO11vEZ/E
-# +m0Ns6GqL45U3lWwZQIc5ZjsucWo9RtpqtTV5Vg23Jtn6xrgMLDrFvDww89uc/Iq
-# CVTw/yZ1hOhiRBhz1yXa6WKyA1BrnzkD6f9PKeC27srsBZ/ulr8wsKBDnPnft7PS
-# 11f2
+# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQBy7ufxDEu0kJPJ9whi
+# dhkVPCQP+gc13hOgcjAx+K8Nc+S6jofZa7dfZTI5eABZ7aDpULGQYMW8WnK8gCSL
+# HDOxHmuPOww5c7K/VBaF5Ttrt3ZO+WH8BWp1H3F7GSBJLOrzFF66AF7IhKKvmFoo
+# GegWpNuLJYAVfIy8DfkRIB9ttulWSuA7tT/4rgL5S+2rUHOi3H+GWPsBpUt+b1v/
+# koBcdbApcW/r8n6OtKqHP+PfZL9w/KYyYafr5UrlgRxSjKN+5v+viUfD3UsOrUxV
+# LetMozQxlYdZmyr3xU+exTAcaIyfvdukC/pDLMUsyJLii4ZaR5Zt9tJOzjJyxsFM
+# 034o
 # SIG # End signature block
