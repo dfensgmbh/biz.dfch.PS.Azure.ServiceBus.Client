@@ -417,14 +417,31 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			##########################################################
 			# Arrange
 			##########################################################
+			# Arrange Subscriptions
+			$guid = [guid]::NewGuid().Guid;
+			$subscriptionName = 'Pester-{0}-{1}' -f $guid, 1;
+			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
+			$messageText = "TestMessageBroadcast"
 			
 			##########################################################
 			# Act
 			##########################################################
+			# Try send a message to a subscription
+			$exception = $null;
+			try 
+			{
+				$messageIdNew = New-SBMessage $messageText -Facility $subscriptionPath -Debug -Retry 1;
+			}
+			catch 
+			{
+				$exception = $_.Exception;
+			}
+			
 			
 			##########################################################
 			# Assert
 			##########################################################
+			$exception | Should be (!$null);
 			
 			##########################################################
 			# Cleanup
