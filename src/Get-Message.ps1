@@ -348,23 +348,23 @@ try
 		$PSCmdlet.ThrowTerminatingError($e);
 	}
 	
-	# Process Message	
-	if ( $ReceiveAndAbandon -and $Receivemode -ne 'ReceiveAndDelete' ) 
+	# Process Message
+	if ( $BrokeredMessage -ne $null ) 
 	{
-		$BrokeredMessage.Abandon();
-	}
-	
-	if ( $ReceiveAndComplete -and $Receivemode -ne 'ReceiveAndDelete' ) 
-	{
-		$BrokeredMessage.Complete();
-	}
-	
-	if ( $BodyAsProperty ) 
-	{
-		try 
+		if ( $ReceiveAndAbandon -and $Receivemode -ne 'ReceiveAndDelete' ) 
+		{
+			$BrokeredMessage.Abandon();
+		}
+		
+		if ( $ReceiveAndComplete -and $Receivemode -ne 'ReceiveAndDelete' ) 
+		{
+			$BrokeredMessage.Complete();
+		}
+		
+		if ( $BodyAsProperty ) 
 		{
 			$PropertyName = 'Body';
-			$PropertyValue = Get-SBMessageBody $BrokeredMessage
+			$PropertyValue = Get-MessageBody -Message $BrokeredMessage;
 			if ( $BrokeredMessage.Properties.ContainsKey($PropertyName) -and $BrokeredMessage.Properties[$PropertyName].toString() -ne $PropertyValue.toString() ) 
 			{
 				[int] $PropertyCount = 1;
@@ -376,13 +376,6 @@ try
 				}
 			}
 			$BrokeredMessage.Properties[$PropertyName] = $PropertyValue;
-		}
-		catch 
-		{
-			$msg = $_.Exception.Message;
-			$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $Message;
-			Log-Error $fn -msg $msg;
-			$PSCmdlet.ThrowTerminatingError($e);
 		}
 	}
 	

@@ -55,19 +55,26 @@ try
 	# Parameter validation
 	#N/A
 
-	# Get Message Body
-	try 
+	# Retry handling
+	$Retry = 2;
+	$RetryInterval = 1;
+	for($c = 0; $c -le $Retry; $c++)
 	{
-		$OutputParameter = Invoke-SBGenericMethod -InputObject $Message -MethodName 'GetBody' -GenericType 'String';
-		$fReturn = $true;
-	} 
-	catch 
-	{
-		$msg = $_.Exception.Message;
-		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $Message;
-		Log-Error $fn -msg $msg;
-		$PSCmdlet.ThrowTerminatingError($e);
+		try
+		{
+			# Get Message Body
+			$OutputParameter = Invoke-GenericMethod -InputObject $Message -MethodName 'GetBody' -GenericType 'String';
+			break;
+		}
+		catch
+		{
+			Log-Debug $fn ("[{0}/{1}] Retrying operation [{2}]" -f $c, $Retry, $fn);
+			Start-Sleep -Seconds $RetryInterval;
+			$RetryInterval *= 2;
+			continue;
+		}
 	}
+	$fReturn = $true;
 
 }
 catch 
