@@ -90,22 +90,19 @@ try
 	# Parameter validation
 	# N/A
 	
-	# Get local instance parameters	
-	if ( !(!(Get-Module ServiceBus -ListAvailable -EA SilentlyContinue)) -and $EndpointServerName -eq 'EndpointServerName' )
+	# Get existing instance parameters	
+	if ( !(!(Get-Module ServiceBus -ListAvailable -EA SilentlyContinue)) -and $EndpointServerName -eq 'amqp.example.com' )
 	{
 		Import-Module -Name ServiceBus -EA SilentlyContinue;
-		if ( (Get-SBFarm).Hosts[0].Name -eq $env:Computername ) 
-		{
-			$EndpointServerName = (Get-SBFarm).Hosts[0].Name;
-			$Namespace = (Get-SBNamespace).Name;
-			$SharedAccessKeyName = (Get-SBAuthorizationRule -NamespaceName (Get-SBNamespace).Name -Name RootManageSharedAccessKey).KeyName;
-			$SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName (Get-SBNamespace).Name -Name RootManageSharedAccessKey).PrimaryKey;
-			
-			(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).EndpointServerName = $EndpointServerName;
-			(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Namespace = $Namespace;
-			(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKeyName = $SharedAccessKeyName;
-			(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKey = $SharedAccessKey;
-		}
+		$EndpointServerName = (Get-SBFarm).Hosts[0].Name;
+		$Namespace = (Get-SBNamespace).Name;
+		$SharedAccessKeyName = (Get-SBAuthorizationRule -NamespaceName (Get-SBNamespace).Name -Name RootManageSharedAccessKey).KeyName;
+		$SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName (Get-SBNamespace).Name -Name RootManageSharedAccessKey).PrimaryKey;
+		
+		(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).EndpointServerName = $EndpointServerName;
+		(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Namespace = $Namespace;
+		(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKeyName = $SharedAccessKeyName;
+		(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKey = $SharedAccessKey;
 	}
 	
 	# Prepare connection string	
