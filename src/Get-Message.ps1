@@ -361,19 +361,29 @@ try
 	
 	if ( $BodyAsProperty ) 
 	{
-		$PropertyName = 'Body';
-		$PropertyValue = Get-SBMessageBody $BrokeredMessage
-		if ( $BrokeredMessage.Properties.ContainsKey($PropertyName) -and $BrokeredMessage.Properties[$PropertyName].toString() -ne $PropertyValue.toString() ) 
+		try 
 		{
-			[int] $PropertyCount = 1;
-			$PropertyName = ("Body{0}" -f $PropertyCount);
-			while( $BrokeredMessage.Properties.ContainsKey($PropertyName) )
+			$PropertyName = 'Body';
+			$PropertyValue = Get-SBMessageBody $BrokeredMessage
+			if ( $BrokeredMessage.Properties.ContainsKey($PropertyName) -and $BrokeredMessage.Properties[$PropertyName].toString() -ne $PropertyValue.toString() ) 
 			{
-				$PropertyCount += 1;
+				[int] $PropertyCount = 1;
 				$PropertyName = ("Body{0}" -f $PropertyCount);
+				while( $BrokeredMessage.Properties.ContainsKey($PropertyName) )
+				{
+					$PropertyCount += 1;
+					$PropertyName = ("Body{0}" -f $PropertyCount);
+				}
 			}
+			$BrokeredMessage.Properties[$PropertyName] = $PropertyValue;
 		}
-		$BrokeredMessage.Properties[$PropertyName] = $PropertyValue;
+		catch 
+		{
+			$msg = $_.Exception.Message;
+			$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $Message;
+			Log-Error $fn -msg $msg;
+			$PSCmdlet.ThrowTerminatingError($e);
+		}
 	}
 	
 	$OutputParameter = $BrokeredMessage;
