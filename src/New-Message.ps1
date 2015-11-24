@@ -27,9 +27,11 @@ $messageid = New-Message 'MyMessage' -Properties @{'Prop1'='Valu1';'Prop2'='Valu
 Sends a message to a sender client, which is based on the Service Bus Messaging Factory against server defined within module configuration xml file.
 #>
 [CmdletBinding(
-	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/',
-	SupportsShouldProcess=$true,
-    ConfirmImpact="Low"
+	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
+	,
+	SupportsShouldProcess = $true
+	,
+    ConfirmImpact = 'Low'
 )]
 [OutputType([string])]
 Param 

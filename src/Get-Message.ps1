@@ -13,25 +13,37 @@ This Cmdlet returns the Messaging Factory message object. In case of failure is 
 See PARAMETER section for a description of input parameters.
 
 .EXAMPLE
-$message = Get-Message -BodyAsProperty;
-write-host $message.Properties['Body']
+Retrieves a message from ServiceBus and save the message contents (body) to a variable. The message is immediately removed from the facility after receipt.
+
+PS > $message = Get-Message -BodyAsProperty;
+PS > write-host $message.Properties['Body']
+I am a message body from ServiceBus with an arbitrary content.
 
 .EXAMPLE
-$message = Get-Message -ReceiveAndDelete;
+Similar to the previous example, but message is explicitly removed from the facility (in case the module default configuration is set to 'PeekLock').
+
+PS > $message = Get-Message -ReceiveAndDelete -BodyAsProperty;
+PS > write-host $message.Properties['Body']
+I am a message body from ServiceBus with an arbitrary content.
 
 .EXAMPLE
-$message = Get-Message -Receivemode 'PeekLock';
-...do something
-$message.Complete();
+This example receives a message from the service bus. The message will be kept in the queue until it is explicity marked as 'Complete'
+
+PS > $message = Get-Message -Receivemode 'PeekLock';
+PS > # do something with the message before you acknowledge receipt
+PS > $message.Complete();
 
 .EXAMPLE
-$message = Get-Message -Facility 'Topic-Newsletter' -EnsureFacility;
+This example retrieves a message from the ServiceBus facility 'Topics-Newsletter'. The facility will be created if it does not exist.
+
+PS > $message = Get-Message -Facility 'Topic-Newsletter' -EnsureFacility;
 
 .EXAMPLE
-$receiver = Get-MessageReceiver -Facility 'MyQueue1';
-$message = Get-Message -Client $receiver;
-
 Receives a message from a receiver client, which is based on the Service Bus Messaging Factory against server defined within module configuration xml file.
+
+PS > $receiver = Get-MessageReceiver -Facility 'MyQueue1';
+PS > $message = Get-Message -Client $receiver;
+
 #>
 [CmdletBinding(
 	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
@@ -80,7 +92,7 @@ Param
 	[alias("QueueName")]
 	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).ReceiveFacility
 	, 
-	# [Optional] Checks if facility existing
+	# [Optional] Specifies if the facility will be created if it does not exist
 	[Parameter(Mandatory = $false, Position = 7)]
 	[alias("ensure")]
 	[alias("broadcast")]
@@ -261,8 +273,8 @@ Param
 	[Parameter(Mandatory = $false, Position = 7)]
 	[alias("ensure")]
 	[alias("broadcast")]
-	[alias("checkfacility")]
-	[switch]$EnsureFacility = $false
+	[alias("CreateIfNotExist")]
+	[switch] $EnsureFacility = $false
 	,
 	# [Optional] Messaging Client (instance of the MessagingFactory)
 	[Parameter(Mandatory = $false, Position = 8)]
@@ -312,7 +324,9 @@ try
 		{
 			$FacilitiyExists = New-MessageFacility -Path $Path -Name $SubscriptionName;
 			$Facility = '{0}\Subscriptions\{1}' -f $Path, $SubscriptionName;
-		} catch {
+		} 
+		catch 
+		{
 			$msg = $_.Exception.Message;
 			Log-Error -msg $msg;
 			$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $Facility;
