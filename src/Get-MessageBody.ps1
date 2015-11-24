@@ -3,37 +3,40 @@ function Get-MessageBody {
 .SYNOPSIS
 Get the message body from a Service Bus Message.
 
-
 .DESCRIPTION
 Get the message body from a Service Bus Message.
-
 
 .OUTPUTS
 This Cmdlet returns the Body as [String] from the MessageFactory Message object. On failure it returns $null.
 
-
 .INPUTS
 See PARAMETER section for a description of input parameters.
 
-
 .EXAMPLE
-$message = Get-MessageBody -Message (Get-Message);
-
 Get the message body from a Service Bus Message.
-Attention: 
 
+PS > Get-Message | Get-MessageBody;
+I am a message body from ServiceBus with an arbitrary content.
+
+Attention: 
+Throws an exception if the body already consumed (called more then once).
+Exception: "The message body cannot be read multiple times. To reuse it store the value after reading."
 	
 #>
 [CmdletBinding(
 	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
+	,
+    SupportsShouldProcess = $true
+	,
+    ConfirmImpact = "Low"
 )]
 [OutputType([String])]
 Param 
 (
 	# [Required] Service Bus Message
-	[Parameter(Mandatory = $true, Position = 0)]
-	[ValidateNotNullorEmpty()]
-	[Microsoft.ServiceBus.Messaging.BrokeredMessage] $Message
+	[Parameter(Mandatory = $true, ValueFromPipeline = $true, Position = 0)]
+	[alias("Message")]
+	[Microsoft.ServiceBus.Messaging.BrokeredMessage] $InputObject
 )
 
 BEGIN 
@@ -54,27 +57,53 @@ try
 {
 	# Parameter validation
 	#N/A
+	
+	# Get ValueFromPipeline
+	$OutputObject = @();	
+	foreach($Object in $InputObject) {
+		if($PSCmdlet.ShouldProcess($Object)) {
 
-	# Retry handling
-	$Retry = 2;
-	$RetryInterval = 1;
-	for($c = 0; $c -le $Retry; $c++)
+			# Retry handling
+			$Retry = 2;
+			$RetryInterval = 1;
+			for($c = 0; $c -le $Retry; $c++)
+			{
+				try
+				{
+					# Get Message Body
+					$OutputParameter = Invoke-GenericMethod -InputObject $Object -MethodName 'GetBody' -GenericType 'String';
+					break;
+				}
+				catch
+				{
+					# Throw execption
+					if ( $_.Exception.Message -match 'The message body cannot be read multiple times.' )
+					{
+						$msg = $_.Exception.Message;
+						$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $Object;
+						$PSCmdlet.ThrowTerminatingError($e);
+					}
+					Log-Debug $fn ("[{0}/{1}] Retrying operation [{2}]" -f $c, $Retry, $fn);
+					Start-Sleep -Seconds $RetryInterval;
+					$RetryInterval *= 2;
+					continue;
+				}
+			}
+			$OutputObject += $OutputParameter;
+			$fReturn = $true;
+			
+		} # if
+	} # foreach
+	
+	# Set output depending is ValueFromPipeline
+	if ( $OutputObject.Count -gt 1 )
 	{
-		try
-		{
-			# Get Message Body
-			$OutputParameter = Invoke-GenericMethod -InputObject $Message -MethodName 'GetBody' -GenericType 'String';
-			break;
-		}
-		catch
-		{
-			Log-Debug $fn ("[{0}/{1}] Retrying operation [{2}]" -f $c, $Retry, $fn);
-			Start-Sleep -Seconds $RetryInterval;
-			$RetryInterval *= 2;
-			continue;
-		}
+		$OutputParameter = $OutputObject[0];
 	}
-	$fReturn = $true;
+	else
+	{
+		$OutputParameter = $OutputObject;
+	}
 
 }
 catch 

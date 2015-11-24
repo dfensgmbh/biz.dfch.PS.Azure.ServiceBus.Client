@@ -1,29 +1,34 @@
 function Get-MessageSender {
 <#
 .SYNOPSIS
-Get a message sender to the Service Bus Message Factory.
-
+Get a message sender instance from the Service Bus Message Factory.
 
 .DESCRIPTION
-Get a message sender to the Service Bus Message Factory.
-
+Get a message sender instance from the Service Bus Message Factory.
 
 .OUTPUTS
 This Cmdlet returns a SbmpMessageSender object with references to the MessageFactory of the application. On failure it returns $null.
 
-
 .INPUTS
 See PARAMETER section for a description of input parameters.
 
+.EXAMPLE
+Get a message sender instance from the Service Bus Message Factory with credentials and server defined within module configuration xml file.
+
+PS > $sender = Get-MessageSender -Facility 'MyQueue1';
+PS > $message = New-Message 'MyMessage' -Client $sender;
+PS > $sender;
+BatchFlushInterval                           Path                                         RetryPolicy                                                                      IsClosed
+------------------                           ----                                         -----------                                                                      --------
+00:00:00.0200000                             MyQueue1                                     Microsoft.ServiceBus.RetryExponential                                               False
 
 .EXAMPLE
-$sender1 = Get-MessageSender -Facility 'MyQueue1';
-$sender2 = Get-MessageSender -Facility 'MyQueue2';
-New-Message 'TEST' -Client $sender1;
-New-Message 'TEST' -Client $sender2;
+Similar to the previous example, but illustrate that sender can be simultaneously created.
 
-Get a message sender to the Service Bus Message Factory with default credentials (current user) and against server defined within module configuration xml file.
-
+PS > $sender1 = Get-MessageSender -Facility 'MyQueue1';
+PS > $sender2 = Get-MessageSender -Facility 'MyQueue2';
+PS > New-Message 'MyMessage' -Client $sender1;
+PS > New-Message 'MyMessage' -Client $sender2;
 	
 #>
 [CmdletBinding(
@@ -32,21 +37,21 @@ Get a message sender to the Service Bus Message Factory with default credentials
 [OutputType([Microsoft.ServiceBus.Messaging.MessageSender])]
 Param 
 (
-	# [Optional] The MessageFactory. If you do not 
-	# specify this value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 0)]
-	[ValidateNotNullorEmpty()]
-	[alias("MessageFactory")]
-	$Factory = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory
-	, 
 	# [Optional] The Facility such as 'MyQueue'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 1)]
+	[Parameter(Mandatory = $false, Position = 0)]
 	[ValidateNotNullorEmpty()]
 	[alias("queue")]
 	[alias("topic")]
 	[alias("QueueName")]
 	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SendFacility
+	, 
+	# [Optional] The MessageFactory. If you do not 
+	# specify this value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 1)]
+	[ValidateNotNullorEmpty()]
+	[alias("MessageFactory")]
+	$Factory = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory
 )
 
 BEGIN 

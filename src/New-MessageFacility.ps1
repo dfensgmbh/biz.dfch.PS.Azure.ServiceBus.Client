@@ -1,82 +1,107 @@
 ﻿function New-MessageFacility {
 <#
-    .SYNOPSIS
-    This script can be used to delete a subscription from a topic.
-            
-    .DESCRIPTION
-    This script can be used to delete a subscription from a topic.
+.SYNOPSIS
+Checks if a ServiceBus facility based on a queue, topic or subscription exists (subscription will be created if it does not exists).
+		
+.DESCRIPTION
+Checks if a ServiceBus facility based on a queue, topic or subscription exists (subscription will be created if it does not exists).
 
-    .PARAMETER  Path
-    Specifies the path of the topic that this subscription description belongs to.
-    
-    .PARAMETER  Name
-    Specifies the name of the subscription.
+.PARAMETER  Path
+Specifies the path of the queue or topic that this subscription description belongs to.
 
-    .PARAMETER  Force
-    Force remove, ignore message count
-	
-    .PARAMETER  Namespace
-    Specifies the name of the Service Bus namespace.
+.PARAMETER  Name
+Specifies the name of the subscription.
+
+.PARAMETER  Force
+Force remove, ignore message count
+
+.PARAMETER  Namespace
+Specifies the name of the Service Bus namespace.
+
+.OUTPUTS
+This Cmdlet returns a object reference. On failure it returns $null.
+
+.EXAMPLE
+This example checks whether in the topic "Topic-Newsletter" the subscription "Receiver-PeterMuster" exists, if not then it will be created.
+
+PS > New-MessageFacility -Path 'Topic-Newsletter' -Name 'Receiver-PeterMuster';
+LockDuration                                    : 00:01:00
+RequiresSession                                 : False
+DefaultMessageTimeToLive                        : 00:10:00
+AutoDeleteOnIdle                                : 00:10:00
+EnableDeadLetteringOnMessageExpiration          : False
+EnableDeadLetteringOnFilterEvaluationExceptions : True
+MessageCount                                    : 0
+MessageCountDetails                             : Microsoft.ServiceBus.Messaging.MessageCountDetails
+TopicPath                                       : Topic-Newsletter
+Name                                            : Receiver-PeterMuster
+MaxDeliveryCount                                : 10
+EnableBatchedOperations                         : True
+Status                                          : Active
+AvailabilityStatus                              : Available
+ForwardTo                                       :
+CreatedAt                                       : 24.11.2015 22:53:03
+UpdatedAt                                       : 24.11.2015 22:53:03
+AccessedAt                                      : 01.01.0001 00:00:00
+UserMetadata                                    :
+IsReadOnly                                      : False
+ExtensionData                                   : System.Runtime.Serialization.ExtensionDataObject
 
 #>
 [CmdletBinding(PositionalBinding=$True)]
 Param(
+	# [Required] Path of a Topic or Queue
+    [Parameter(Mandatory = $true, Position = 0)]
+    [String] $Path
+	,
+	# [Optional] Subscription name
+    [Parameter(Mandatory = $false, Position = 1)]
+    [String] $Name
+	,
 	# [Optional] The EndpointServerName such as 'localhost'. If you do not 
 	# specify this value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 0)]
+	[Parameter(Mandatory = $false, Position = 2)]
 	[ValidateNotNullorEmpty()]
 	[string] $EndpointServerName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).EndpointServerName
 	, 
 	# [Optional] The RuntimePort such as '123'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 1)]
+	[Parameter(Mandatory = $false, Position = 3)]
 	[int] $RuntimePort = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).RuntimePort
 	, 
 	# [Optional] The SharedAccessKeyName. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 2)]
+	[Parameter(Mandatory = $false, Position = 4)]
 	[string] $SharedAccessKeyName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKeyName	
 	,
 	# [Optional] The SharedAccessKey. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 3)]
+	[Parameter(Mandatory = $false, Position = 5)]
 	[string] $SharedAccessKey = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKey	
 	,
 	# [Optional] The Namespace such as 'ServiceBusDefaultNamespace'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 4)]
+	[Parameter(Mandatory = $false, Position = 6)]
 	[string] $Namespace = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).NameSpace
 	,
 	# [Optional] The TransportType such as 'Amqp'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 5)]
+	[Parameter(Mandatory = $false, Position = 7)]
 	[ValidateSet('Amqp', 'NetMessaging')]
 	[string] $TransportType = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).TransportType
 	, 
 	# [Optional] The RuntimePort such as '123'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 6)]
+	[Parameter(Mandatory = $false, Position = 8)]
 	[int] $ManagementPort = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).ManagementPort
 	, 
-	# [Required] Path of a Topic or Queue
-    [Parameter(Mandatory = $true)]
-    [String] $Path
-	,
-	# [Required] Subscription name
-    [Parameter(Mandatory = $true)]
-    [String] $Name
-	,
 	# AutoDeleteOnIdle
-	[Parameter(Mandatory = $false)]
+	[Parameter(Mandatory = $false, Position = 9)]
 	[int] $AutoDeleteOnIdle = 10
 	,
 	# DefaultMessageTimeToLive
-	[Parameter(Mandatory = $false)]
+	[Parameter(Mandatory = $false, Position = 10)]
 	[int] $DefaultMessageTimeToLive = 10
-	,
-	# [Optional] 
-	[Parameter(Mandatory = $false)]
-	[switch] $Force = $false
     )
 	
 BEGIN 
@@ -88,6 +113,13 @@ BEGIN
 	$PSDefaultParameterValues.'Log-Debug:fn' = $fn;
 	$PSDefaultParameterValues.'Log-Info:fn' = $fn;
 	$PSDefaultParameterValues.'Log-Error:fn' = $fn;
+	
+	# Factory validation
+	if((Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory -isnot [Microsoft.ServiceBus.Messaging.MessagingFactory]) {
+		$msg = "Factory: Factory validation FAILED. Connect to the server before using the Cmdlet.";
+		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory;
+		$PSCmdlet.ThrowTerminatingError($e);
+	} # if
 
 }
 # BEGIN
@@ -129,10 +161,18 @@ try
 			$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $NamespaceManager;
 			$PSCmdlet.ThrowTerminatingError($e);
 		}
+		else
+		{
+			if ( !$PSBoundParameters.ContainsKey('Name') ) 
+			{
+				$OutputParameter = $NamespaceManager.GetTopic($Path);
+			}
+		}
+		# TopicExists throws an exception if $Path a Queue
 	}
 	catch
 	{
-		if (!$NamespaceManager.QueueExists($Path))
+		if ($NamespaceManager.QueueExists($Path))
 		{
 			$OutputParameter = $NamespaceManager.GetQueue($Path);
 		}
@@ -146,7 +186,7 @@ try
 	}
 
 	# Check if the subscription exists
-	if ( $OutputParameter -ne $null ) 
+	if ( $OutputParameter -eq $null -and $PSBoundParameters.ContainsKey('Name') ) 
 	{
 		if ($NamespaceManager.SubscriptionExists($Path, $Name))
 		{

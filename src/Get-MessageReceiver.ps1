@@ -1,29 +1,53 @@
 function Get-MessageReceiver {
 <#
 .SYNOPSIS
-Get a message receiver to the Service Bus Message Factory.
-
+Get a message receiver instance from the Service Bus Message Factory.
 
 .DESCRIPTION
-Get a message receiver to the Service Bus Message Factory.
-
+Get a message receiver instance from the Service Bus Message Factory.
 
 .OUTPUTS
 This Cmdlet returns a SbmpMessageReceiver object with references to the MessageFactory of the application. On failure it returns $null.
 
-
 .INPUTS
 See PARAMETER section for a description of input parameters.
 
+.EXAMPLE
+Get a message receiver instance from the Service Bus Message Factory with credentials and server defined within module configuration xml file.
+
+PS > $receiver = Get-MessageReceiver -Facility 'MyQueue1';
+PS > $message = Get-Message -Client $receiver;
+PS > $receiver;
+SessionId                :
+Path                     : MyQueue1
+BatchFlushInterval       : 00:00:00.0200000
+PrefetchCount            : 0
+LastPeekedSequenceNumber : 0
+Mode                     : ReceiveAndDelete
+RetryPolicy              : Microsoft.ServiceBus.RetryExponential
+IsClosed                 : False
 
 .EXAMPLE
-$receiver1 = Get-MessageReceiver -Facility 'MyQueue1';
-$receiver2 = Get-MessageReceiver -Facility 'MyQueue2';
-Get-Message -Client $receiver1;
-Get-Message -Client $receiver2;
+Similar to the previous example, but set the receivemode to 'PeekLock' (in case the module default configuration is set to 'ReceiveAndDelete').
 
-Get a message receiver to the Service Bus Message Factory with default credentials (current user) and against server defined within module configuration xml file.
+PS > $receiver = Get-MessageReceiver -Facility 'MyQueue1' -Receivemode 'PeekLock';
+PS > $message = Get-Message -Client $receiver;
+PS > $receiver;
+SessionId                :
+Path                     : MyQueue1
+BatchFlushInterval       : 00:00:00.0200000
+PrefetchCount            : 0
+LastPeekedSequenceNumber : 0
+Mode                     : PeekLock
+RetryPolicy              : Microsoft.ServiceBus.RetryExponential
+IsClosed                 : False
 
+.EXAMPLE
+Similar to the previous example, but illustrate that receiver can be simultaneously created.
+PS > $receiver1 = Get-MessageReceiver -Facility 'MyQueue1';
+PS > $receiver2 = Get-MessageReceiver -Facility 'MyQueue2';
+PS > $messagefromrecv1 = Get-Message -Client $receiver1;
+PS > $messagefromrecv2 = Get-Message -Client $receiver2;
 
 #>
 [CmdletBinding(
@@ -32,16 +56,9 @@ Get a message receiver to the Service Bus Message Factory with default credentia
 [OutputType([Microsoft.ServiceBus.Messaging.MessageReceiver])]
 Param 
 (
-	# [Optional] The Message Factory. If you do not 
-	# specify this value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 0)]
-	[ValidateNotNullorEmpty()]
-	[alias("MessageFactory")]
-	$Factory = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory
-	, 
 	# [Optional] The Facility such as 'MyQueue'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 1)]
+	[Parameter(Mandatory = $false, Position = 0)]
 	[ValidateNotNullorEmpty()]
 	[alias("queue")]
 	[alias("subscription")]
@@ -50,9 +67,16 @@ Param
 	, 
 	# [Optional] The Receivemode such as 'PeekLock'. If you do not specify this 
 	# value it is taken from the default parameter.
-	[Parameter(Mandatory = $false, Position = 2)]
+	[Parameter(Mandatory = $false, Position = 1)]
 	[ValidateSet('PeekLock', 'ReceiveAndDelete')]
 	[string] $Receivemode = 'ReceiveAndDelete'
+	,
+	# [Optional] The Message Factory. If you do not 
+	# specify this value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 2)]
+	[ValidateNotNullorEmpty()]
+	[alias("MessageFactory")]
+	$Factory = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory
 )
 
 BEGIN 

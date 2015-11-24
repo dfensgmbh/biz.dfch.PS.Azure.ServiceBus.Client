@@ -13,6 +13,32 @@ This Cmdlet returns the Messaging Factory message object. In case of failure is 
 See PARAMETER section for a description of input parameters.
 
 .EXAMPLE
+Retrieves a message from ServiceBus. The message is immediately removed from the facility after receipt.
+
+PS > Get-Message;
+CorrelationId           :
+SessionId               :
+ReplyToSessionId        :
+DeliveryCount           : 1
+ExpiresAtUtc            : 31.12.9999 23:59:59
+LockedUntilUtc          :
+LockToken               :
+MessageId               : e6dc938213264de790e53ace7949f610
+ContentType             :
+Label                   :
+Properties              : {}
+ReplyTo                 :
+EnqueuedTimeUtc         : 24.12.2015 21:00:00
+ScheduledEnqueueTimeUtc : 01.01.0001 00:00:00
+SequenceNumber          : 1
+EnqueuedSequenceNumber  : 0
+Size                    : 6
+State                   : Active
+TimeToLive              : 10675199.02:48:05.4775807
+To                      :
+IsBodyConsumed          : False
+
+.EXAMPLE
 Retrieves a message from ServiceBus and save the message contents (body) to a variable. The message is immediately removed from the facility after receipt.
 
 PS > $message = Get-Message -BodyAsProperty;
@@ -104,25 +130,18 @@ Param
 	[alias("MessageClient")]
 	$Client
 	,
-	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
-	# which to perform login. Default is credential as specified in the module 
-	# configuration file.
-	[Parameter(Mandatory = $false, Position = 9)]
-	[alias("cred")]
-	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
-	,
 	# [Optional] Skip retrying
-	[Parameter(Mandatory = $false, Position = 10)]
+	[Parameter(Mandatory = $false, Position = 9)]
 	[switch]$NoRetry = $false
 	,
 	# [Optional] The Retry. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory=$false, Position = 11)]
+	[Parameter(Mandatory=$false, Position = 10)]
 	[int]$Retry = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandRetry
 	,
 	# [Optional] The RetryInterval. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory=$false, Position = 12)]
+	[Parameter(Mandatory=$false, Position = 11)]
 	[int]$RetryInterval = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandRetryInterval
 )
 
@@ -130,7 +149,14 @@ BEGIN
 {
 	$datBegin = [datetime]::Now;
 	[string] $fn = $MyInvocation.MyCommand.Name;
-	Log-Debug $fn ("CALL. Facility '{0}'; Username '{1}'" -f $Facility, $Credential.Username ) -fac 1;
+	Log-Debug $fn ("CALL. Facility '{0}'" -f $Facility ) -fac 1;
+	
+	# Factory validation
+	if((Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory -isnot [Microsoft.ServiceBus.Messaging.MessagingFactory]) {
+		$msg = "Factory: Factory validation FAILED. Connect to the server before using the Cmdlet.";
+		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory;
+		$PSCmdlet.ThrowTerminatingError($e);
+	} # if
 
 }
 # BEGIN 
@@ -169,7 +195,8 @@ PROCESS
 			# Throw last execption
 			if ( $NoRetry -or 
 				$c -gt $Retry -or 
-				$_.Exception.Message -match 'Connect to the message factory before using the Cmdlet.' 
+				$_.Exception.Message -match 'Connect to the message factory before using the Cmdlet.' -or
+				$_.Exception.Message -match 'The message body cannot be read multiple times.'
 				)
 			{
 				if ($PSCmdlet.MyInvocation.BoundParameters["Debug"].IsPresent) 
@@ -280,20 +307,13 @@ Param
 	[Parameter(Mandatory = $false, Position = 8)]
 	[alias("MessageClient")]
 	$Client
-	,
-	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
-	# which to perform login. Default is credential as specified in the module 
-	# configuration file.
-	[Parameter(Mandatory = $false, Position = 9)]
-	[alias("cred")]
-	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
 )
 
 BEGIN 
 {
 	$datBegin = [datetime]::Now;
 	[string] $fn = $MyInvocation.MyCommand.Name;
-	Log-Debug $fn ("CALL. Facility '{0}'; Username '{1}'" -f $Facility, $Credential.Username ) -fac 1;
+	Log-Debug $fn ("CALL. Facility '{0}'" -f $Facility ) -fac 1;
 
 }
 # BEGIN 

@@ -3,27 +3,44 @@ function Enter-Server {
 .SYNOPSIS
 Performs a login to the Service Bus Message Factory.
 
-
 .DESCRIPTION
 Performs a login to the Service Bus Message Factory.
 
 This is the first Cmdlet to be executed and required for all other Cmdlets of this module. It creates service references to the routers of the application.
 
-
 .OUTPUTS
 This Cmdlet returns a SbmpMessagingFactory object with references to the MessageFactory of the application. On failure it returns $null.
-
 
 .INPUTS
 See PARAMETER section for a description of input parameters.
 
+.EXAMPLE
+Performs a login to the Service Bus Message Factory with credentials, namespace and server defined within module configuration xml file.
+
+PS > $svc = Enter-Server;
+PS > $svc
+Address                                              PrefetchCount RetryPolicy                                                                      IsClosed
+-------                                              ------------- -----------                                                                      --------
+sb://amqp.example.com:5671/ServiceBusDefaultNamespace            0 Microsoft.ServiceBus.RetryExponential                                               False
 
 .EXAMPLE
-$svc = Enter-Server;
-$svc
+Performs a login to the Service Bus Message Factory with parameters credentials, namespace and server.
 
-Performs a login to the Service Bus Message Factory with default credentials (current user) and against server defined within module configuration xml file.
+PS > $svc = Enter-Server -EndpointServerName amqp.example.com -SharedAccessKeyName exampleKeyName -SharedAccessKey exampleKey -Namespace exampleNamespace -TransportType Amqp;
+PS > $svc
+Address                                              PrefetchCount RetryPolicy                                                                      IsClosed
+-------                                              ------------- -----------                                                                      --------
+sb://amqp.example.com:5671/exampleNamespace			             0 Microsoft.ServiceBus.RetryExponential                                               False
 
+
+PS > $svc.GetSettings();
+
+EnableAdditionalClientTimeout : True
+OperationTimeout              : 00:01:00
+TransportType                 : Amqp
+NetMessagingTransportSettings : Microsoft.ServiceBus.Messaging.NetMessagingTransportSettings
+AmqpTransportSettings         : Microsoft.ServiceBus.Messaging.Amqp.AmqpTransportSettings
+TokenProvider                 : Microsoft.ServiceBus.SharedAccessSignatureTokenProvider
 
 #>
 [CmdletBinding(
@@ -104,7 +121,7 @@ try
 		(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKeyName = $SharedAccessKeyName;
 		(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKey = $SharedAccessKey;
 	}
-	
+
 	# Prepare connection string	
 	$ConnectionString = 'Endpoint=sb://{0}/{1};RuntimePort={2};SharedAccessKeyName={3};SharedAccessKey={4};TransportType={5}' -f $EndpointServerName, $Namespace, $RuntimePort, $SharedAccessKeyName, $SharedAccessKey, $TransportType;
 	
