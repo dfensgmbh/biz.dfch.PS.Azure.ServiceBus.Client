@@ -14,7 +14,7 @@ Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 	
 	. "$here\$sut"
 	
-	Context "SBClientSimple.Tests" {
+	Context "#CLOUDTCL-1892-SBClientSimpleTests" {
 		
 		BeforeEach {
 			# Import management module for service bus - required to create, check and delete queues/topis/subscriptions
