@@ -3,27 +3,44 @@ function Enter-Server {
 .SYNOPSIS
 Performs a login to the Service Bus Message Factory.
 
-
 .DESCRIPTION
 Performs a login to the Service Bus Message Factory.
 
 This is the first Cmdlet to be executed and required for all other Cmdlets of this module. It creates service references to the routers of the application.
 
-
 .OUTPUTS
 This Cmdlet returns a SbmpMessagingFactory object with references to the MessageFactory of the application. On failure it returns $null.
-
 
 .INPUTS
 See PARAMETER section for a description of input parameters.
 
+.EXAMPLE
+Performs a login to the Service Bus Message Factory with credentials, namespace and server defined within module configuration xml file.
+
+PS > $svc = Enter-Server;
+PS > $svc
+Address                                              PrefetchCount RetryPolicy                                                                      IsClosed
+-------                                              ------------- -----------                                                                      --------
+sb://amqp.example.com:5671/ServiceBusDefaultNamespace            0 Microsoft.ServiceBus.RetryExponential                                               False
 
 .EXAMPLE
-$svc = Enter-Server;
-$svc
+Performs a login to the Service Bus Message Factory with parameters credentials, namespace and server.
 
-Performs a login to the Service Bus Message Factory with default credentials (current user) and against server defined within module configuration xml file.
+PS > $svc = Enter-Server -EndpointServerName amqp.example.com -SharedAccessKeyName exampleKeyName -SharedAccessKey exampleKey -Namespace exampleNamespace -TransportType Amqp;
+PS > $svc
+Address                                              PrefetchCount RetryPolicy                                                                      IsClosed
+-------                                              ------------- -----------                                                                      --------
+sb://amqp.example.com:5671/exampleNamespace			             0 Microsoft.ServiceBus.RetryExponential                                               False
 
+
+PS > $svc.GetSettings();
+
+EnableAdditionalClientTimeout : True
+OperationTimeout              : 00:01:00
+TransportType                 : Amqp
+NetMessagingTransportSettings : Microsoft.ServiceBus.Messaging.NetMessagingTransportSettings
+AmqpTransportSettings         : Microsoft.ServiceBus.Messaging.Amqp.AmqpTransportSettings
+TokenProvider                 : Microsoft.ServiceBus.SharedAccessSignatureTokenProvider
 
 #>
 [CmdletBinding(
@@ -90,24 +107,21 @@ try
 	# Parameter validation
 	# N/A
 	
-	# Get local instance parameters	
-	if ( !(!(Get-Module ServiceBus -ListAvailable -EA SilentlyContinue)) -and $EndpointServerName -eq 'EndpointServerName' )
+	# Get existing instance parameters	
+	if ( !(!(Get-Module ServiceBus -ListAvailable -EA SilentlyContinue)) -and $EndpointServerName -eq 'amqp.example.com' )
 	{
 		Import-Module -Name ServiceBus -EA SilentlyContinue;
-		if ( (Get-SBFarm).Hosts[0].Name -eq $env:Computername ) 
-		{
-			$EndpointServerName = (Get-SBFarm).Hosts[0].Name;
-			$Namespace = (Get-SBNamespace).Name;
-			$SharedAccessKeyName = (Get-SBAuthorizationRule -NamespaceName (Get-SBNamespace).Name -Name RootManageSharedAccessKey).KeyName;
-			$SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName (Get-SBNamespace).Name -Name RootManageSharedAccessKey).PrimaryKey;
-			
-			(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).EndpointServerName = $EndpointServerName;
-			(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Namespace = $Namespace;
-			(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKeyName = $SharedAccessKeyName;
-			(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKey = $SharedAccessKey;
-		}
+		$EndpointServerName = (Get-SBFarm).Hosts[0].Name;
+		$Namespace = (Get-SBNamespace).Name;
+		$SharedAccessKeyName = (Get-SBAuthorizationRule -NamespaceName (Get-SBNamespace).Name -Name RootManageSharedAccessKey).KeyName;
+		$SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName (Get-SBNamespace).Name -Name RootManageSharedAccessKey).PrimaryKey;
+		
+		(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).EndpointServerName = $EndpointServerName;
+		(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Namespace = $Namespace;
+		(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKeyName = $SharedAccessKeyName;
+		(Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKey = $SharedAccessKey;
 	}
-	
+
 	# Prepare connection string	
 	$ConnectionString = 'Endpoint=sb://{0}/{1};RuntimePort={2};SharedAccessKeyName={3};SharedAccessKey={4};TransportType={5}' -f $EndpointServerName, $Namespace, $RuntimePort, $SharedAccessKeyName, $SharedAccessKey, $TransportType;
 	
@@ -198,8 +212,8 @@ if($MyInvocation.ScriptName) { Export-ModuleMember -Function Enter-Server; }
 # SIG # Begin signature block
 # MIIXDwYJKoZIhvcNAQcCoIIXADCCFvwCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU99YchxPTYJUFoDsns+So/4v1
-# 3vqgghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQURBLSL8HdCAs3ehspni3psC45
+# fd+gghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
 # VzELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNV
 # BAsTB1Jvb3QgQ0ExGzAZBgNVBAMTEkdsb2JhbFNpZ24gUm9vdCBDQTAeFw0xMTA0
 # MTMxMDAwMDBaFw0yODAxMjgxMjAwMDBaMFIxCzAJBgNVBAYTAkJFMRkwFwYDVQQK
@@ -298,26 +312,26 @@ if($MyInvocation.ScriptName) { Export-ModuleMember -Function Enter-Server; }
 # MDAuBgNVBAMTJ0dsb2JhbFNpZ24gQ29kZVNpZ25pbmcgQ0EgLSBTSEEyNTYgLSBH
 # MgISESENFrJbjBGW0/5XyYYR5rrZMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEM
 # MQowCKACgAChAoAAMBkGCSqGSIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQB
-# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBRK7uTLLkjQQdQr
-# hZpHGZnIm3SXKzANBgkqhkiG9w0BAQEFAASCAQBtL1vyzPAUczoRmwKpW/v1bUus
-# OQZPsOPpGGEEITHdGUsIVqIivMPjTyDHrS3IqcNl90FHXngzQsO3x757LoLlimnz
-# bnStyjJj7gWv24e4BwPLHf7iaO682oPXWotOWH+p+BTMZbqCQ6gDkJwEhfs8woPL
-# 83uc/Q12QqL+MmwuZJHNpQL0gUi0goipvu5yifHG70fZCWmq3TaNhjKGzqp2R3jC
-# gEgztdJDn+8DFNc9GHmquP0o2CcAGEnYPlqgXohZBLu7wMyyDGHkE337Too41rJb
-# tSczObTIwFOKELpbrM6jfKRl5YIQuftGBX6LWiy9zeV3XpleECdC4g3Zza6zoYIC
+# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBQlEAUQT0gYXpa9
+# vie5IHFrh20LuDANBgkqhkiG9w0BAQEFAASCAQDBD/G4mPJLJkMF5hnrJ86lJSao
+# iDIKvgQU40oJe4D9Iu/Jt2tUnRdFX4y26hXeiUwfBzrnjyZBiuqbSqbInG7fsdBh
+# 299Hlsc30grAVxp3Aflh8ohfPKIj2mstINT15djlUY2uYpw5j9n2wQiTOV1UfPUX
+# RIyfVTZhjl87f5Wh9y4kblv8AYJSEz38PhuBXatqM6ASQ3mwYqUWK2lf/IRmd4Ca
+# KUuC1Pisy9aqbGC670LOo5hCf3LXAuX2RrsVyYENfJpw0rUucXroO19fnG48117E
+# 4Nia7luKIdMZU5tfEBFjj3HR2wKiIIkAVqgiZnnENiFiYlISIoqyyBPUNUAsoYIC
 # ojCCAp4GCSqGSIb3DQEJBjGCAo8wggKLAgEBMGgwUjELMAkGA1UEBhMCQkUxGTAX
 # BgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGlt
 # ZXN0YW1waW5nIENBIC0gRzICEhEhBqCB0z/YeuWCTMFrUglOAzAJBgUrDgMCGgUA
 # oIH9MBgGCSqGSIb3DQEJAzELBgkqhkiG9w0BBwEwHAYJKoZIhvcNAQkFMQ8XDTE1
-# MTExNjEwNTg1OVowIwYJKoZIhvcNAQkEMRYEFNDrGK4N56huw9Fx9yIWhu219UVm
+# MTIxNTE2NTE0MFowIwYJKoZIhvcNAQkEMRYEFLWqsh842Wahj1rjIrj2uCuijiLN
 # MIGdBgsqhkiG9w0BCRACDDGBjTCBijCBhzCBhAQUs2MItNTN7U/PvWa5Vfrjv7Es
 # KeYwbDBWpFQwUjELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYt
 # c2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGltZXN0YW1waW5nIENBIC0gRzICEhEh
-# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQBkwKHpAXkUKAIK/GD4
-# 7+4OfNdmuFn/warmf7oGhGM8eFLcuURrn2NS/9lErrNpb07hSUCtYiEdASGEhO2X
-# R5AglzAI5PnYg26HGp25bYNXuMvvYv/gMmO37mKjqfDFUptWo+DaV3yRFVgbw6Gs
-# YJooVzTGBV5I4SlWopjmW3hhtIr8x/w/aS2miqM+BNiqvfG2wFDNIWFd45gVY1G6
-# PAPu6GoaHfXt33HMNyM5hwAEwPkUeeIRuNb+9vlvOK+Jt65CwGFyA7gN2iMmfc5D
-# kika3AvMg5/tOLCmxvmb6K7uZ7RTiqLNmda7xqN+00toDHJXYWatvfzjyrie0jPw
-# jQS4
+# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQBc5ZoX87GyZvd4VWyH
+# SXop3C/QWSLRhfsP9wxATw/H00U/jEf6XomI9vaAHoXpANOrwHtZPJOIbi1SJ1wk
+# mL2jgE1zExogqD+DxdE/UtZnvCz7hMolQf3hAshjVNGr6ZgV26F0UIEja/5Nw6jy
+# fT8pWT/fXAjInSGX1TCaX04lNLT20mEGNyp9c9PjiQYxUoPTzesmaYpmAjCvmde/
+# XYdrKJHmJd7PDmL0+TIlWgeUDHlAVt+cV02EOhPEHHjorD5fhKTikg9A7sQ3Slm8
+# mlPdN4Xds9yLvhMaJgDga4ElPWXiK+ceUOJclsytkh8q0LGWUcMQDiDGKKddG61E
+# wxbk
 # SIG # End signature block

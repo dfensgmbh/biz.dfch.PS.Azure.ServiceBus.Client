@@ -17,7 +17,10 @@ Param
 	[string] $Receivemode = 'PeekLock'
 )
 
-Import-Module C:\development\projects\GitHub\biz.dfch.PS.Azure.ServiceBus.Client\src\biz.dfch.PS.Azure.ServiceBus.Client.psd1;
+$moduleName = "biz.dfch.PS.Azure.ServiceBus.Client";			
+Import-Module $moduleName -ErrorAction:SilentlyContinue -Force;
+
+
 
 $biz_dfch_PS_Azure_ServiceBus_Client.EndpointServerName = (Get-SBFarm).Hosts[0].Name;
 $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace = (Get-SBNamespace).Name;

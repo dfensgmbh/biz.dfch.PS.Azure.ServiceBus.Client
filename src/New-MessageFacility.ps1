@@ -1,82 +1,107 @@
 ﻿function New-MessageFacility {
 <#
-    .SYNOPSIS
-    This script can be used to delete a subscription from a topic.
-            
-    .DESCRIPTION
-    This script can be used to delete a subscription from a topic.
+.SYNOPSIS
+Checks if a ServiceBus facility based on a queue, topic or subscription exists (subscription will be created if it does not exists).
+		
+.DESCRIPTION
+Checks if a ServiceBus facility based on a queue, topic or subscription exists (subscription will be created if it does not exists).
 
-    .PARAMETER  Path
-    Specifies the path of the topic that this subscription description belongs to.
-    
-    .PARAMETER  Name
-    Specifies the name of the subscription.
+.PARAMETER  Path
+Specifies the path of the queue or topic that this subscription description belongs to.
 
-    .PARAMETER  Force
-    Force remove, ignore message count
-	
-    .PARAMETER  Namespace
-    Specifies the name of the Service Bus namespace.
+.PARAMETER  Name
+Specifies the name of the subscription.
+
+.PARAMETER  Force
+Force remove, ignore message count
+
+.PARAMETER  Namespace
+Specifies the name of the Service Bus namespace.
+
+.OUTPUTS
+This Cmdlet returns a object reference. On failure it returns $null.
+
+.EXAMPLE
+This example checks whether in the topic "Topic-Newsletter" the subscription "Receiver-PeterMuster" exists, if not then it will be created.
+
+PS > New-MessageFacility -Path 'Topic-Newsletter' -Name 'Receiver-PeterMuster';
+LockDuration                                    : 00:01:00
+RequiresSession                                 : False
+DefaultMessageTimeToLive                        : 00:10:00
+AutoDeleteOnIdle                                : 00:10:00
+EnableDeadLetteringOnMessageExpiration          : False
+EnableDeadLetteringOnFilterEvaluationExceptions : True
+MessageCount                                    : 0
+MessageCountDetails                             : Microsoft.ServiceBus.Messaging.MessageCountDetails
+TopicPath                                       : Topic-Newsletter
+Name                                            : Receiver-PeterMuster
+MaxDeliveryCount                                : 10
+EnableBatchedOperations                         : True
+Status                                          : Active
+AvailabilityStatus                              : Available
+ForwardTo                                       :
+CreatedAt                                       : 24.11.2015 22:53:03
+UpdatedAt                                       : 24.11.2015 22:53:03
+AccessedAt                                      : 01.01.0001 00:00:00
+UserMetadata                                    :
+IsReadOnly                                      : False
+ExtensionData                                   : System.Runtime.Serialization.ExtensionDataObject
 
 #>
 [CmdletBinding(PositionalBinding=$True)]
 Param(
+	# [Required] Path of a Topic or Queue
+    [Parameter(Mandatory = $true, Position = 0)]
+    [String] $Path
+	,
+	# [Optional] Subscription name
+    [Parameter(Mandatory = $false, Position = 1)]
+    [String] $Name
+	,
 	# [Optional] The EndpointServerName such as 'localhost'. If you do not 
 	# specify this value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 0)]
+	[Parameter(Mandatory = $false, Position = 2)]
 	[ValidateNotNullorEmpty()]
 	[string] $EndpointServerName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).EndpointServerName
 	, 
 	# [Optional] The RuntimePort such as '123'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 1)]
+	[Parameter(Mandatory = $false, Position = 3)]
 	[int] $RuntimePort = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).RuntimePort
 	, 
 	# [Optional] The SharedAccessKeyName. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 2)]
+	[Parameter(Mandatory = $false, Position = 4)]
 	[string] $SharedAccessKeyName = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKeyName	
 	,
 	# [Optional] The SharedAccessKey. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 3)]
+	[Parameter(Mandatory = $false, Position = 5)]
 	[string] $SharedAccessKey = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).SharedAccessKey	
 	,
 	# [Optional] The Namespace such as 'ServiceBusDefaultNamespace'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 4)]
+	[Parameter(Mandatory = $false, Position = 6)]
 	[string] $Namespace = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).NameSpace
 	,
 	# [Optional] The TransportType such as 'Amqp'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 5)]
+	[Parameter(Mandatory = $false, Position = 7)]
 	[ValidateSet('Amqp', 'NetMessaging')]
 	[string] $TransportType = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).TransportType
 	, 
 	# [Optional] The RuntimePort such as '123'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 6)]
+	[Parameter(Mandatory = $false, Position = 8)]
 	[int] $ManagementPort = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).ManagementPort
 	, 
-	# [Required] Path of a Topic or Queue
-    [Parameter(Mandatory = $true)]
-    [String] $Path
-	,
-	# [Required] Subscription name
-    [Parameter(Mandatory = $true)]
-    [String] $Name
-	,
 	# AutoDeleteOnIdle
-	[Parameter(Mandatory = $false)]
+	[Parameter(Mandatory = $false, Position = 9)]
 	[int] $AutoDeleteOnIdle = 10
 	,
 	# DefaultMessageTimeToLive
-	[Parameter(Mandatory = $false)]
+	[Parameter(Mandatory = $false, Position = 10)]
 	[int] $DefaultMessageTimeToLive = 10
-	,
-	# [Optional] 
-	[Parameter(Mandatory = $false)]
-	[switch] $Force = $false
     )
 	
 BEGIN 
@@ -88,6 +113,13 @@ BEGIN
 	$PSDefaultParameterValues.'Log-Debug:fn' = $fn;
 	$PSDefaultParameterValues.'Log-Info:fn' = $fn;
 	$PSDefaultParameterValues.'Log-Error:fn' = $fn;
+	
+	# Factory validation
+	if((Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory -isnot [Microsoft.ServiceBus.Messaging.MessagingFactory]) {
+		$msg = "Factory: Factory validation FAILED. Connect to the server before using the Cmdlet.";
+		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory;
+		$PSCmdlet.ThrowTerminatingError($e);
+	} # if
 
 }
 # BEGIN
@@ -129,10 +161,18 @@ try
 			$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $NamespaceManager;
 			$PSCmdlet.ThrowTerminatingError($e);
 		}
+		else
+		{
+			if ( !$PSBoundParameters.ContainsKey('Name') ) 
+			{
+				$OutputParameter = $NamespaceManager.GetTopic($Path);
+			}
+		}
+		# TopicExists throws an exception if $Path a Queue
 	}
 	catch
 	{
-		if (!$NamespaceManager.QueueExists($Path))
+		if ($NamespaceManager.QueueExists($Path))
 		{
 			$OutputParameter = $NamespaceManager.GetQueue($Path);
 		}
@@ -146,7 +186,7 @@ try
 	}
 
 	# Check if the subscription exists
-	if ( $OutputParameter -ne $null ) 
+	if ( $OutputParameter -eq $null -and $PSBoundParameters.ContainsKey('Name') ) 
 	{
 		if ($NamespaceManager.SubscriptionExists($Path, $Name))
 		{
@@ -247,8 +287,8 @@ if($MyInvocation.ScriptName) { Export-ModuleMember -function New-MessageFacility
 # SIG # Begin signature block
 # MIIXDwYJKoZIhvcNAQcCoIIXADCCFvwCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUtbd1wjGpCa4OQFp/iNCo8x6H
-# nnGgghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUGpGCyVLCEZ9jZhBZynCcXivm
+# qUqgghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
 # VzELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNV
 # BAsTB1Jvb3QgQ0ExGzAZBgNVBAMTEkdsb2JhbFNpZ24gUm9vdCBDQTAeFw0xMTA0
 # MTMxMDAwMDBaFw0yODAxMjgxMjAwMDBaMFIxCzAJBgNVBAYTAkJFMRkwFwYDVQQK
@@ -347,26 +387,26 @@ if($MyInvocation.ScriptName) { Export-ModuleMember -function New-MessageFacility
 # MDAuBgNVBAMTJ0dsb2JhbFNpZ24gQ29kZVNpZ25pbmcgQ0EgLSBTSEEyNTYgLSBH
 # MgISESENFrJbjBGW0/5XyYYR5rrZMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEM
 # MQowCKACgAChAoAAMBkGCSqGSIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQB
-# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBTgy+F4NLwCp7EK
-# 6mKDQQ/d25bj/zANBgkqhkiG9w0BAQEFAASCAQCOPZq9aJRa1NcfqI6JE0JeYwNQ
-# WDP1uP8gNT/ltVqKXfbmSsyru374HigY2Imiene2TcFWtJ/mUxruO/MAknm0d03L
-# sMnVT57n9fslUQXD5K/DuUmiq7akQDftXQGwHOMzl4S3q65T3Fvs8MLRVONURswF
-# S/nWu6Hzbn+Ru0DbOlvui6sZwLo5fS9qzjPb2fBm3/wqq9jmj0S6/8pt/658txEG
-# WUItUAmN2wU5NjhXkveu8fIyfLXNxmlOCtkDx0Fr4q8Xjqh95aQdlXbroXa9tDjb
-# yCzlxbJeLay0u3Wn312YmGgWMo67t7Hhp7Cg8Hszq4YVX4XVuCv7TiBcI5iEoYIC
+# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBS8VEowTb6TpCvD
+# n54XF6rwvtH9rDANBgkqhkiG9w0BAQEFAASCAQCg/lun8Sg5/XaA1nEt8au4thEc
+# 4uv36LU8ZG3U0m7c+8SdKiXzxNTvubLiDxNuDsJCgQACf2CTVxk+RWgsJN5Ecoor
+# jRfiEU3IvkQLzEHlm7j1Z6MB7FalrtuJRZ3w7Svld8c/bYglMdvX30iuR6QNh+BW
+# iq/M/bN1zFQ/LC+109VU+5VpJmshB1ew4mjfbXB+RGongySv/6ZPR2ZYheXXgN9G
+# D+Ycluk8Nfpe1ly7i9nsSz4y+FdGe//zE3AJFOlpalRCtWNkue0NhEfER2unlxJ2
+# YwFujhRAX80S6SfNy0tri+WEKlDXJlB8OTVdI8CCgez0/uSY6DZxvjxYPQyroYIC
 # ojCCAp4GCSqGSIb3DQEJBjGCAo8wggKLAgEBMGgwUjELMAkGA1UEBhMCQkUxGTAX
 # BgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGlt
 # ZXN0YW1waW5nIENBIC0gRzICEhEhBqCB0z/YeuWCTMFrUglOAzAJBgUrDgMCGgUA
 # oIH9MBgGCSqGSIb3DQEJAzELBgkqhkiG9w0BBwEwHAYJKoZIhvcNAQkFMQ8XDTE1
-# MTExNjEwNTkwMVowIwYJKoZIhvcNAQkEMRYEFAE5/Nit6kyOmKEgFJQ9XEzqXoym
+# MTIxNTE2NTE0M1owIwYJKoZIhvcNAQkEMRYEFFVmBnpV48pzX3cUEh+iWJM0VLr8
 # MIGdBgsqhkiG9w0BCRACDDGBjTCBijCBhzCBhAQUs2MItNTN7U/PvWa5Vfrjv7Es
 # KeYwbDBWpFQwUjELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYt
 # c2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGltZXN0YW1waW5nIENBIC0gRzICEhEh
-# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQBLJQxIp6I9QwUTpa/T
-# 9uyNTRfuMuQNmzvf2QSKtgJpYbbVuoRpL9GYaHyYlZPpoTDzLi0e5loacYfqa6S7
-# xcrNfWcHNjBxkhN7UcgQjNP+wcr7YTUypFn3dKs+9o3n+wZdnuPS63hKN8MT2T1+
-# Ru4qFLlk6qey+gOhH5ulwHyxpmYOFeDhuOiKLt5r4fOkJx6dTYybKssCHhuqxzsq
-# Fn2QK1VVHZUlakezTnsZyj2gXgvuWcOp9R90t/nEMzN/X1G17pakn6cLoYReFyCu
-# Hw8zUOVAhQqKhtQShyMKggzrHDUDO+EnqGHRZGSE13XJLkV26KBF5hywO2exGM9N
-# MqvV
+# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQBs1X8ckPJ37ArVRwWM
+# iklk6loNFGZaRTnEwpEe5ZXstxi9zcMMELcukPoKqb+xSRZ1lHSGVPra1SFK0+el
+# ELPp6TQMCf42sGWhPMRIoUKBVlydvV/BJ1YMQLN8LYvAXLrELKZvta2zulSF2/70
+# CsTq5tKY/licn1xaCQrMLHL7rBDWP0/iQzvDiE3J1bjM4AwEMGv0ts9jkvKdlu6O
+# fM52X1msQk/QdZxMEHZdKlWv/9Aiuc4CDIBXSHoHf8Zim5/51tjtppNbj8QjWOWL
+# 4TLKqzhTPVMq1qJgAlk0pGHOTIkQxP+grIlNa1PEhCsDKuhQUOxYfGnQS0ptdFri
+# ocXk
 # SIG # End signature block

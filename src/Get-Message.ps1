@@ -13,25 +13,63 @@ This Cmdlet returns the Messaging Factory message object. In case of failure is 
 See PARAMETER section for a description of input parameters.
 
 .EXAMPLE
-$message = Get-Message -BodyAsProperty;
-write-host $message.Properties['Body']
+Retrieves a message from ServiceBus. The message is immediately removed from the facility after receipt.
+
+PS > Get-Message;
+CorrelationId           :
+SessionId               :
+ReplyToSessionId        :
+DeliveryCount           : 1
+ExpiresAtUtc            : 31.12.9999 23:59:59
+LockedUntilUtc          :
+LockToken               :
+MessageId               : e6dc938213264de790e53ace7949f610
+ContentType             :
+Label                   :
+Properties              : {}
+ReplyTo                 :
+EnqueuedTimeUtc         : 24.12.2015 21:00:00
+ScheduledEnqueueTimeUtc : 01.01.0001 00:00:00
+SequenceNumber          : 1
+EnqueuedSequenceNumber  : 0
+Size                    : 6
+State                   : Active
+TimeToLive              : 10675199.02:48:05.4775807
+To                      :
+IsBodyConsumed          : False
 
 .EXAMPLE
-$message = Get-Message -ReceiveAndDelete;
+Retrieves a message from ServiceBus and save the message contents (body) to a variable. The message is immediately removed from the facility after receipt.
+
+PS > $message = Get-Message -BodyAsProperty;
+PS > write-host $message.Properties['Body']
+I am a message body from ServiceBus with an arbitrary content.
 
 .EXAMPLE
-$message = Get-Message -Receivemode 'PeekLock';
-...do something
-$message.Complete();
+Similar to the previous example, but message is explicitly removed from the facility (in case the module default configuration is set to 'PeekLock').
+
+PS > $message = Get-Message -ReceiveAndDelete -BodyAsProperty;
+PS > write-host $message.Properties['Body']
+I am a message body from ServiceBus with an arbitrary content.
 
 .EXAMPLE
-$message = Get-Message -Facility 'Topic-Newsletter' -EnsureFacility;
+This example receives a message from the service bus. The message will be kept in the queue until it is explicity marked as 'Complete'
+
+PS > $message = Get-Message -Receivemode 'PeekLock';
+PS > # do something with the message before you acknowledge receipt
+PS > $message.Complete();
 
 .EXAMPLE
-$receiver = Get-MessageReceiver -Facility 'MyQueue1';
-$message = Get-Message -Client $receiver;
+This example retrieves a message from the ServiceBus facility 'Topics-Newsletter'. The facility will be created if it does not exist.
 
+PS > $message = Get-Message -Facility 'Topic-Newsletter' -EnsureFacility;
+
+.EXAMPLE
 Receives a message from a receiver client, which is based on the Service Bus Messaging Factory against server defined within module configuration xml file.
+
+PS > $receiver = Get-MessageReceiver -Facility 'MyQueue1';
+PS > $message = Get-Message -Client $receiver;
+
 #>
 [CmdletBinding(
 	HelpURI = 'http://dfch.biz/biz/dfch/PS/AzureServiceBus/Client/'
@@ -80,7 +118,7 @@ Param
 	[alias("QueueName")]
 	[string] $Facility = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).ReceiveFacility
 	, 
-	# [Optional] Checks if facility existing
+	# [Optional] Specifies if the facility will be created if it does not exist
 	[Parameter(Mandatory = $false, Position = 7)]
 	[alias("ensure")]
 	[alias("broadcast")]
@@ -92,25 +130,18 @@ Param
 	[alias("MessageClient")]
 	$Client
 	,
-	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
-	# which to perform login. Default is credential as specified in the module 
-	# configuration file.
-	[Parameter(Mandatory = $false, Position = 9)]
-	[alias("cred")]
-	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
-	,
 	# [Optional] Skip retrying
-	[Parameter(Mandatory = $false, Position = 10)]
+	[Parameter(Mandatory = $false, Position = 9)]
 	[switch]$NoRetry = $false
 	,
 	# [Optional] The Retry. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory=$false, Position = 11)]
+	[Parameter(Mandatory=$false, Position = 10)]
 	[int]$Retry = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandRetry
 	,
 	# [Optional] The RetryInterval. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory=$false, Position = 12)]
+	[Parameter(Mandatory=$false, Position = 11)]
 	[int]$RetryInterval = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).CommandRetryInterval
 )
 
@@ -118,7 +149,14 @@ BEGIN
 {
 	$datBegin = [datetime]::Now;
 	[string] $fn = $MyInvocation.MyCommand.Name;
-	Log-Debug $fn ("CALL. Facility '{0}'; Username '{1}'" -f $Facility, $Credential.Username ) -fac 1;
+	Log-Debug $fn ("CALL. Facility '{0}'" -f $Facility ) -fac 1;
+	
+	# Factory validation
+	if((Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory -isnot [Microsoft.ServiceBus.Messaging.MessagingFactory]) {
+		$msg = "Factory: Factory validation FAILED. Connect to the server before using the Cmdlet.";
+		$e = New-CustomErrorRecord -m $msg -cat InvalidData -o (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory;
+		$PSCmdlet.ThrowTerminatingError($e);
+	} # if
 
 }
 # BEGIN 
@@ -157,7 +195,8 @@ PROCESS
 			# Throw last execption
 			if ( $NoRetry -or 
 				$c -gt $Retry -or 
-				$_.Exception.Message -match 'Connect to the message factory before using the Cmdlet.' 
+				$_.Exception.Message -match 'Connect to the message factory before using the Cmdlet.' -or
+				$_.Exception.Message -match 'The message body cannot be read multiple times.'
 				)
 			{
 				if ($PSCmdlet.MyInvocation.BoundParameters["Debug"].IsPresent) 
@@ -261,27 +300,20 @@ Param
 	[Parameter(Mandatory = $false, Position = 7)]
 	[alias("ensure")]
 	[alias("broadcast")]
-	[alias("checkfacility")]
-	[switch]$EnsureFacility = $false
+	[alias("CreateIfNotExist")]
+	[switch] $EnsureFacility = $false
 	,
 	# [Optional] Messaging Client (instance of the MessagingFactory)
 	[Parameter(Mandatory = $false, Position = 8)]
 	[alias("MessageClient")]
 	$Client
-	,
-	# Encrypted credentials as [System.Management.Automation.PSCredential] with 
-	# which to perform login. Default is credential as specified in the module 
-	# configuration file.
-	[Parameter(Mandatory = $false, Position = 9)]
-	[alias("cred")]
-	$Credential = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Credential
 )
 
 BEGIN 
 {
 	$datBegin = [datetime]::Now;
 	[string] $fn = $MyInvocation.MyCommand.Name;
-	Log-Debug $fn ("CALL. Facility '{0}'; Username '{1}'" -f $Facility, $Credential.Username ) -fac 1;
+	Log-Debug $fn ("CALL. Facility '{0}'" -f $Facility ) -fac 1;
 
 }
 # BEGIN 
@@ -312,7 +344,9 @@ try
 		{
 			$FacilitiyExists = New-MessageFacility -Path $Path -Name $SubscriptionName;
 			$Facility = '{0}\Subscriptions\{1}' -f $Path, $SubscriptionName;
-		} catch {
+		} 
+		catch 
+		{
 			$msg = $_.Exception.Message;
 			Log-Error -msg $msg;
 			$e = New-CustomErrorRecord -m $msg -cat InvalidData -o $Facility;
@@ -348,32 +382,35 @@ try
 		$PSCmdlet.ThrowTerminatingError($e);
 	}
 	
-	# Process Message	
-	if ( $ReceiveAndAbandon -and $Receivemode -ne 'ReceiveAndDelete' ) 
+	# Process Message
+	if ( $BrokeredMessage -ne $null ) 
 	{
-		$BrokeredMessage.Abandon();
-	}
-	
-	if ( $ReceiveAndComplete -and $Receivemode -ne 'ReceiveAndDelete' ) 
-	{
-		$BrokeredMessage.Complete();
-	}
-	
-	if ( $BodyAsProperty ) 
-	{
-		$PropertyName = 'Body';
-		$PropertyValue = Get-SBMessageBody $BrokeredMessage
-		if ( $BrokeredMessage.Properties.ContainsKey($PropertyName) -and $BrokeredMessage.Properties[$PropertyName].toString() -ne $PropertyValue.toString() ) 
+		if ( $ReceiveAndAbandon -and $Receivemode -ne 'ReceiveAndDelete' ) 
 		{
-			[int] $PropertyCount = 1;
-			$PropertyName = ("Body{0}" -f $PropertyCount);
-			while( $BrokeredMessage.Properties.ContainsKey($PropertyName) )
-			{
-				$PropertyCount += 1;
-				$PropertyName = ("Body{0}" -f $PropertyCount);
-			}
+			$BrokeredMessage.Abandon();
 		}
-		$BrokeredMessage.Properties[$PropertyName] = $PropertyValue;
+		
+		if ( $ReceiveAndComplete -and $Receivemode -ne 'ReceiveAndDelete' ) 
+		{
+			$BrokeredMessage.Complete();
+		}
+		
+		if ( $BodyAsProperty ) 
+		{
+			$PropertyName = 'Body';
+			$PropertyValue = Get-MessageBody -Message $BrokeredMessage;
+			if ( $BrokeredMessage.Properties.ContainsKey($PropertyName) -and $BrokeredMessage.Properties[$PropertyName].toString() -ne $PropertyValue.toString() ) 
+			{
+				[int] $PropertyCount = 1;
+				$PropertyName = ("Body{0}" -f $PropertyCount);
+				while( $BrokeredMessage.Properties.ContainsKey($PropertyName) )
+				{
+					$PropertyCount += 1;
+					$PropertyName = ("Body{0}" -f $PropertyCount);
+				}
+			}
+			$BrokeredMessage.Properties[$PropertyName] = $PropertyValue;
+		}
 	}
 	
 	$OutputParameter = $BrokeredMessage;
@@ -456,8 +493,8 @@ END
 # SIG # Begin signature block
 # MIIXDwYJKoZIhvcNAQcCoIIXADCCFvwCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU4JbjYuQxuwIHDgWCo7jZIyje
-# VvCgghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU8+qmTyVuRWaRFdBcUFJRqxVB
+# zTOgghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
 # VzELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNV
 # BAsTB1Jvb3QgQ0ExGzAZBgNVBAMTEkdsb2JhbFNpZ24gUm9vdCBDQTAeFw0xMTA0
 # MTMxMDAwMDBaFw0yODAxMjgxMjAwMDBaMFIxCzAJBgNVBAYTAkJFMRkwFwYDVQQK
@@ -556,26 +593,26 @@ END
 # MDAuBgNVBAMTJ0dsb2JhbFNpZ24gQ29kZVNpZ25pbmcgQ0EgLSBTSEEyNTYgLSBH
 # MgISESENFrJbjBGW0/5XyYYR5rrZMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEM
 # MQowCKACgAChAoAAMBkGCSqGSIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQB
-# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBQAnM8vxrJAqFbH
-# 1dns9HDB0ZtnLTANBgkqhkiG9w0BAQEFAASCAQBLwsIiygSKqpXNWcfriE7cAOz7
-# lrx1uZq0RJw2XxOvrjkxY+gASbH2bMWYvL1NrxC/DJe4DthebzKnWdFrdP5q7lAv
-# J4wymoLrcZ51qaV1j4D5F8ubLJugfFgQY5DsymqXHySVcZ01EgRwI+5oLAW/y8LQ
-# XHANyI+fW0uWKZtHSxNPnVBDisWvwm2HN9uMv+sCUEealGn69WF4uXrILhiBLtBT
-# M/l+CNZ3u7B+CgP/IhKsO1r+1P915j1sxg/aOoIqDDKpYLfc9eBBxB1ODWVKb0V/
-# A7TL9g4Swz9Ygfv2P/xsHNg5BpXTKw0qTU5hoaF4aNHColY3AweFEhX4CMdFoYIC
+# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBQUyl4UhfPWVEHQ
+# oegIVppTDa++ITANBgkqhkiG9w0BAQEFAASCAQAL8WnpPAvXklLeyl2O/UPuJRxy
+# xlS6HMd4YD0iBQS4zZ3FbO6KKHZjs7y33X2pEjItzmDSocRfqPHZKUmwbCDoLVyo
+# pYx0NFAlsqCZKYcpen3kaXsAnhzBg832HoYC+DFLIJdfPO3xq4UopdFja2C6LMyQ
+# ribhobTk0M+qUVZTyEMtfLZAgjNbvRN0ao/uXh9g48csvho60TadWvFOIng/xS6o
+# OrH0sHYp0KGQ4gzSFNmgjmrAEH6DK6aTWRF2iTPcifm0sgCKStacY7Y4W2U+FjSM
+# Plc7QET6fXZ0buwzat1E/WFR4qSHIPDNJC6CTL1RrDxfAB7my8aoL+rvOABaoYIC
 # ojCCAp4GCSqGSIb3DQEJBjGCAo8wggKLAgEBMGgwUjELMAkGA1UEBhMCQkUxGTAX
 # BgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGlt
 # ZXN0YW1waW5nIENBIC0gRzICEhEhBqCB0z/YeuWCTMFrUglOAzAJBgUrDgMCGgUA
 # oIH9MBgGCSqGSIb3DQEJAzELBgkqhkiG9w0BBwEwHAYJKoZIhvcNAQkFMQ8XDTE1
-# MTExNjEwNTg1OVowIwYJKoZIhvcNAQkEMRYEFLgKFeFdaf6OfXFrx5CpNPEeuy0z
+# MTIxNTE2NTE0MVowIwYJKoZIhvcNAQkEMRYEFOJLzWhMQKXZDVnzkzQpCSED5kaF
 # MIGdBgsqhkiG9w0BCRACDDGBjTCBijCBhzCBhAQUs2MItNTN7U/PvWa5Vfrjv7Es
 # KeYwbDBWpFQwUjELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYt
 # c2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGltZXN0YW1waW5nIENBIC0gRzICEhEh
-# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQA2tIJNK1wr5qvgXCvV
-# 9z73Sqz+Svvlbh344YKEOaJvHkbuHSBErQhXoM5XCAD8i3qKSdpDo2Y0pN8ugBKB
-# Ok2Ir52nsSbnBwzAMxrdElaF6jDpbqiPw+aOf7h0jQlVpUr1OswB3xYLbV6/f+74
-# fzuW28hSP0GaGcU4zBZw6C/rUq4qR5tRDUfZtYXflhEuWrN601vqnxybxE8IlSey
-# PCaA+/tEakzeTwVwnBVuZX0XfjrZb2+bpvoiWI6K8ZkLe5bhiOIYD6WQdST5IOHc
-# kJHFo/cuiMaGZypt+5+PuiI4zjGcXG3+EYLpGrG392bzYnrp9go4zSDccwU2MXUy
-# nSmD
+# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQBEHgd7hdWs6radJOv1
+# 06HNHeiHQJZyK8RUWqUdTGtwLWG0HpdcH6A/x/wWmHvvl9k6W1svFPkkdakNWjeb
+# xv1Q4D/gtdHoDkVTv6tpimQArXpase2N+mYwwOWAtf2ogrQHhOVBj61fjcETAVQu
+# yvDmX2d0dTG3jnLChXc0CavywvsaF0WpEXvf27bAWRZDQPFqRzCx1X+/WvwGbmqi
+# mFRV0jvt/C6oaB1ymLX/It9trqhhVW7PjpRbXLwr5Vw0kL92CpZ4AEEx4/H50Tjm
+# 1FniVT6bzc5zci1DyWhdwc5bOS59wPg/MkMk2lmHwDkwdUKV/YR/FJwDCBfUftSR
+# JdWj
 # SIG # End signature block

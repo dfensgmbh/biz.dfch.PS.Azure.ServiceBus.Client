@@ -1,29 +1,53 @@
 function Get-MessageReceiver {
 <#
 .SYNOPSIS
-Get a message receiver to the Service Bus Message Factory.
-
+Get a message receiver instance from the Service Bus Message Factory.
 
 .DESCRIPTION
-Get a message receiver to the Service Bus Message Factory.
-
+Get a message receiver instance from the Service Bus Message Factory.
 
 .OUTPUTS
 This Cmdlet returns a SbmpMessageReceiver object with references to the MessageFactory of the application. On failure it returns $null.
 
-
 .INPUTS
 See PARAMETER section for a description of input parameters.
 
+.EXAMPLE
+Get a message receiver instance from the Service Bus Message Factory with credentials and server defined within module configuration xml file.
+
+PS > $receiver = Get-MessageReceiver -Facility 'MyQueue1';
+PS > $message = Get-Message -Client $receiver;
+PS > $receiver;
+SessionId                :
+Path                     : MyQueue1
+BatchFlushInterval       : 00:00:00.0200000
+PrefetchCount            : 0
+LastPeekedSequenceNumber : 0
+Mode                     : ReceiveAndDelete
+RetryPolicy              : Microsoft.ServiceBus.RetryExponential
+IsClosed                 : False
 
 .EXAMPLE
-$receiver1 = Get-MessageReceiver -Facility 'MyQueue1';
-$receiver2 = Get-MessageReceiver -Facility 'MyQueue2';
-Get-Message -Client $receiver1;
-Get-Message -Client $receiver2;
+Similar to the previous example, but set the receivemode to 'PeekLock' (in case the module default configuration is set to 'ReceiveAndDelete').
 
-Get a message receiver to the Service Bus Message Factory with default credentials (current user) and against server defined within module configuration xml file.
+PS > $receiver = Get-MessageReceiver -Facility 'MyQueue1' -Receivemode 'PeekLock';
+PS > $message = Get-Message -Client $receiver;
+PS > $receiver;
+SessionId                :
+Path                     : MyQueue1
+BatchFlushInterval       : 00:00:00.0200000
+PrefetchCount            : 0
+LastPeekedSequenceNumber : 0
+Mode                     : PeekLock
+RetryPolicy              : Microsoft.ServiceBus.RetryExponential
+IsClosed                 : False
 
+.EXAMPLE
+Similar to the previous example, but illustrate that receiver can be simultaneously created.
+PS > $receiver1 = Get-MessageReceiver -Facility 'MyQueue1';
+PS > $receiver2 = Get-MessageReceiver -Facility 'MyQueue2';
+PS > $messagefromrecv1 = Get-Message -Client $receiver1;
+PS > $messagefromrecv2 = Get-Message -Client $receiver2;
 
 #>
 [CmdletBinding(
@@ -32,16 +56,9 @@ Get a message receiver to the Service Bus Message Factory with default credentia
 [OutputType([Microsoft.ServiceBus.Messaging.MessageReceiver])]
 Param 
 (
-	# [Optional] The Message Factory. If you do not 
-	# specify this value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 0)]
-	[ValidateNotNullorEmpty()]
-	[alias("MessageFactory")]
-	$Factory = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory
-	, 
 	# [Optional] The Facility such as 'MyQueue'. If you do not specify this 
 	# value it is taken from the module configuration file.
-	[Parameter(Mandatory = $false, Position = 1)]
+	[Parameter(Mandatory = $false, Position = 0)]
 	[ValidateNotNullorEmpty()]
 	[alias("queue")]
 	[alias("subscription")]
@@ -50,9 +67,16 @@ Param
 	, 
 	# [Optional] The Receivemode such as 'PeekLock'. If you do not specify this 
 	# value it is taken from the default parameter.
-	[Parameter(Mandatory = $false, Position = 2)]
+	[Parameter(Mandatory = $false, Position = 1)]
 	[ValidateSet('PeekLock', 'ReceiveAndDelete')]
 	[string] $Receivemode = 'ReceiveAndDelete'
+	,
+	# [Optional] The Message Factory. If you do not 
+	# specify this value it is taken from the module configuration file.
+	[Parameter(Mandatory = $false, Position = 2)]
+	[ValidateNotNullorEmpty()]
+	[alias("MessageFactory")]
+	$Factory = (Get-Variable -Name $MyInvocation.MyCommand.Module.PrivateData.MODULEVAR -ValueOnly).Factory
 )
 
 BEGIN 
@@ -72,7 +96,7 @@ BEGIN
 	# Check message factory status
 	if ( $Factory.IsClosed ) 
 	{
-		Log-Info $fn ("MessageFactory Endpoint '{0}' is closed -> reconnect" -f $Factory.Address.AbsolutePath, $Facility, $Credential.Username ) -fac 1;
+		Log-Info $fn ("MessageFactory Endpoint '{0}' is closed -> reconnect" -f $Factory.Address.AbsolutePath) -fac 1;
 		[Microsoft.ServiceBus.Messaging.MessagingFactory] $Factory = Enter-ServiceBus -EndpointServerName $Factory.Address.Host -RuntimePort $Factory.Address.Port -Namespace $Factory.Address.Segments[-1];
 	}
 }
@@ -191,8 +215,8 @@ if($MyInvocation.ScriptName) { Export-ModuleMember -Function Get-MessageReceiver
 # SIG # Begin signature block
 # MIIXDwYJKoZIhvcNAQcCoIIXADCCFvwCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUUWZ1ddVVl1DUQ8hYSMpRkUke
-# xeagghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUzkY7FlBvWNXmgNsstclGhd5P
+# BmWgghHCMIIEFDCCAvygAwIBAgILBAAAAAABL07hUtcwDQYJKoZIhvcNAQEFBQAw
 # VzELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNV
 # BAsTB1Jvb3QgQ0ExGzAZBgNVBAMTEkdsb2JhbFNpZ24gUm9vdCBDQTAeFw0xMTA0
 # MTMxMDAwMDBaFw0yODAxMjgxMjAwMDBaMFIxCzAJBgNVBAYTAkJFMRkwFwYDVQQK
@@ -291,26 +315,26 @@ if($MyInvocation.ScriptName) { Export-ModuleMember -Function Get-MessageReceiver
 # MDAuBgNVBAMTJ0dsb2JhbFNpZ24gQ29kZVNpZ25pbmcgQ0EgLSBTSEEyNTYgLSBH
 # MgISESENFrJbjBGW0/5XyYYR5rrZMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEM
 # MQowCKACgAChAoAAMBkGCSqGSIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQB
-# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBRfTyHdW2SH2DW4
-# EwzAQxFDXUmUSTANBgkqhkiG9w0BAQEFAASCAQCV+br07cDvTQmxLEp46aaY0JJ/
-# EZrYyLSZehpT/hnQ37/9vo7dleYO0rtT93uLTaSeiQE/XVQ9NZlF7cG8xe0xwljU
-# UrFlzkI1e0BvXzvCrGEJ/PbsfbKNKRV3/6xOk2WQTSV7W8guRbq2Af6+Uwx6GWeX
-# E3PrAZFYaGlus50pdZ+b1K94+Fko49VQHwwjq5AKSqRgR4fDLIHKUaDnHxBrnNc0
-# ALYh39HQVZQpJ7xbWZ6q+SqVQ8tiF5i9yNeJYj6jDpgOlkdMyTw57edJYeB/Hl74
-# tVOpfqMPjDInq3vdz1oNv5yCkBD/l61Oy9BYb04TR8+Zd+RY79DBVijLMK7koYIC
+# gjcCAQsxDjAMBgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBS7H2A8toNA2iYD
+# 5AxQ0cW5MVX3LTANBgkqhkiG9w0BAQEFAASCAQAXQ7Y0+PoUENzbYzOMknbmurEl
+# g6Tpdb7SxtqamSOvRWPhDDXB0wwrS0IuNiJgUR+T6gOAil4xeThXAWXJdcaWsLPv
+# BAcUdkzM9pUCNRCcmhW5PNWWBxiSHQX4xKdsnpeaxBNZn4RuI5cFk8Wy6kgVCwOI
+# B7GoExi7JUZZct/ouP9I/6Riqw8PEJKHnXyfZKLaugIZrxXdHJ3RtKtjWK71uPh9
+# MrXPIubsny7ca7NuHj0ufnGLnMnxUzsssuQakyBATH7TEejf+lLLEIMruTFcU12n
+# t4Pi0W+5HbGs+uIhifJ+zVzi1DrOhW+ApfUoVi1BNrT/yaFIQzqwUU4zUUBtoYIC
 # ojCCAp4GCSqGSIb3DQEJBjGCAo8wggKLAgEBMGgwUjELMAkGA1UEBhMCQkUxGTAX
 # BgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGlt
 # ZXN0YW1waW5nIENBIC0gRzICEhEhBqCB0z/YeuWCTMFrUglOAzAJBgUrDgMCGgUA
 # oIH9MBgGCSqGSIb3DQEJAzELBgkqhkiG9w0BBwEwHAYJKoZIhvcNAQkFMQ8XDTE1
-# MTExNjEwNTkwMFowIwYJKoZIhvcNAQkEMRYEFPcj2Xs/BEViiJ14b5CWdyhmKdOU
+# MTIxNTE2NTE0MVowIwYJKoZIhvcNAQkEMRYEFGIjM6aM3i7EqCHmEGr/CirbHUIe
 # MIGdBgsqhkiG9w0BCRACDDGBjTCBijCBhzCBhAQUs2MItNTN7U/PvWa5Vfrjv7Es
 # KeYwbDBWpFQwUjELMAkGA1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYt
 # c2ExKDAmBgNVBAMTH0dsb2JhbFNpZ24gVGltZXN0YW1waW5nIENBIC0gRzICEhEh
-# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQCeLd3G5tD42FtFZ2tY
-# DPXCYTRixN+AX2AUUvsN2PsXmkjSdhRwHp3a15smmvz0+RdKVOrZBto0iVq/8DXu
-# JN3YIxUz0wwd18q8ChZeUZhunAAzvpUOINMfpF+v0o8ykdsyfTbtYhO+MlVgfihn
-# VTPJuNMuY0KVILyVhhBKA07K0G3XYDs6G6NuG8DXqSIVhBHgzxUtLiEjRbRVjlek
-# MNYrbllhBBBGTMRnKHYUCIZPVA3EGTHWhig7Zy52jjeoT/M6xL82Mu14bXD7ds8z
-# 0S2mBxBMdvB+FYJa/hA5xLtFMw76x/SB5gJ4xqZUpmUF4GyritiZony2/fjvVb1d
-# TLN9
+# BqCB0z/YeuWCTMFrUglOAzANBgkqhkiG9w0BAQEFAASCAQAUwYO2Gs/MQnWWMB/t
+# Pc0BQrCFYiLVmFp29MDkgbExR64gRvTEwvFsvJgqMH8BCnupsu/NgRXaKoZ2JjkG
+# 1V9NFlcwlUSxOooiPhBPrkunBFsaIk/9NcF7j1ZPclGTazu9Mrr6W6YxfFFmFOZ6
+# S6K16dG4X5wrfsIAZjkTnQyvnKUI9y1nuF1c0olWxARKtDUL/R9w2z52OuQW3nCN
+# YxX4U03nLFbBVwYYnsbNRVienCJyvVdSTcIHr5c0v41QCE0NGw/l1zulTcC814R7
+# 2UJRf/IRfj0kunj6/brIjHGPcygGavP8rYejHp/POL0AYrj43VzR7VhJq4Xc1J2A
+# EhpN
 # SIG # End signature block
