@@ -36,7 +36,7 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).PrimaryKey;
 			
 			# Create Topic
-			$guid = [guid]::NewGuid().Guid;
+			$guid = [guid]::NewGuid().ToString();
 			$topicName = "Pester-{0}" -f $guid;
 			New-SBTopic -Path $topicName;
 			
@@ -73,7 +73,7 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			# Arrange MessageReceiver (separate sessions)
 			$newJobs = New-Object System.Collections.ArrayList
 			$subscriptionPaths = New-Object System.Collections.ArrayList;
-			$guid = [guid]::NewGuid().Guid;
+			$guid = [guid]::NewGuid().ToString();
 
 			for ($i=1; $i -le $amountOfReceiver; $i++)
 			{
@@ -200,7 +200,7 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			# Arrange MessageReceiver (separate sessions)
 			$newJobs = New-Object System.Collections.ArrayList
 			$subscriptionPaths = New-Object System.Collections.ArrayList;
-			$guid = [guid]::NewGuid().Guid;
+			$guid = [guid]::NewGuid().ToString();
 
 			for ($i=1; $i -le $amountOfReceiver; $i++)
 			{
@@ -347,7 +347,7 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			
 			# Arrange MessageReceiver (separate sessions)
 			$subscriptionPaths = New-Object System.Collections.ArrayList;
-			$guid = [guid]::NewGuid().Guid;
+			$guid = [guid]::NewGuid().ToString();
 
 			for ($i=1; $i -le $amountOfReceiver; $i++)
 			{
@@ -422,7 +422,7 @@ Describe -Tags "SBClientBroadcast.Tests" "SBClientBroadcast.Tests" {
 			# Arrange
 			##########################################################
 			# Arrange Subscriptions
-			$guid = [guid]::NewGuid().Guid;
+			$guid = [guid]::NewGuid().ToString();
 			$subscriptionName = 'Pester-{0}-{1}' -f $guid, 1;
 			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
 			$messageText = "TestMessageBroadcast"
