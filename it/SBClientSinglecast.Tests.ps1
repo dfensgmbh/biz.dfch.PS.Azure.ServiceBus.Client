@@ -35,7 +35,7 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).PrimaryKey;
 			
 			# Create Topic
-			$guid = [guid]::NewGuid().Guid;
+			$guid = [guid]::NewGuid().ToString();
 			$topicName = "Pester-{0}" -f $guid;
 			New-SBTopic -Path $topicName;
 			
@@ -77,7 +77,7 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 			$numberOfSender = 2;
 			$messageText = "TestMessageBroadcast"
 
-			$guid = [guid]::NewGuid().Guid;
+			$guid = [guid]::NewGuid().ToString();
 			$subscriptionName = 'Pester-{0}' -f $guid;
 			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
 			$subscription = New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
@@ -196,7 +196,7 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 			$numberOfSender = 2;
 			$messageText = "TestMessageBroadcast"
 
-			$guid = [guid]::NewGuid().Guid;
+			$guid = [guid]::NewGuid().ToString();
 			$subscriptionName = 'Pester-{0}' -f $guid;
 			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
 			$subscription = New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
@@ -320,7 +320,7 @@ Describe -Tags "SBClientSinglecast.Tests" "SBClientSinglecast.Tests" {
 			$messageText = "TestMessageBroadcast"
 			$subscriptionLockDuration = 20; #In sek
 
-			$guid = [guid]::NewGuid().Guid;
+			$guid = [guid]::NewGuid().ToString();
 			$subscriptionName = 'Pester-{0}' -f $guid;
 			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
 			$subscription = New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration $subscriptionLockDuration;

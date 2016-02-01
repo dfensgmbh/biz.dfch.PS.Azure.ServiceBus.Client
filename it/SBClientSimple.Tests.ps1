@@ -37,7 +37,7 @@ Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 			$biz_dfch_PS_Azure_ServiceBus_Client.SharedAccessKey = (Get-SBAuthorizationRule -NamespaceName $biz_dfch_PS_Azure_ServiceBus_Client.NameSpace -Name RootManageSharedAccessKey).PrimaryKey;
 			
 			# Create Topic
-			$guid = [guid]::NewGuid().Guid;
+			$guid = [guid]::NewGuid().ToString();
 			$topicName = "Pester-{0}" -f $guid;
 			New-SBTopic -Path $topicName;
 			
@@ -74,7 +74,7 @@ Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 				
 			# Arrange
 			$messageText = 'Pester-Test-Message';
-			$guid = [guid]::NewGuid().Guid;
+			$guid = [guid]::NewGuid().ToString();
 			$subscriptionName = 'Pester-{0}' -f $guid;
 			
 			# Arrange test parameter
@@ -118,7 +118,7 @@ Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 			# Arrange
 			$messageText = 'Pester-Test-Message';
 			
-			$guid = [guid]::NewGuid().Guid;
+			$guid = [guid]::NewGuid().ToString();
 			$subscriptionName = 'Pester-{0}' -f $guid;
 			$subscriptionNew = New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
 			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
@@ -135,7 +135,7 @@ Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 			# Arrange
 			$messageText = 'Pester-Test-Message';
 			
-			$guid = [guid]::NewGuid().Guid;
+			$guid = [guid]::NewGuid().ToString();
 			$subscriptionName = 'Pester-{0}' -f $guid;
 			$subscriptionNew = New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
 			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
@@ -155,7 +155,7 @@ Describe -Tags "SBClientSimple.Tests" "SBClientSimple.Tests" {
 			# Arrange
 			$messageText = 'Pester-Test-Message';
 			
-			$guid = [guid]::NewGuid().Guid;
+			$guid = [guid]::NewGuid().ToString();
 			$subscriptionName = 'Pester-{0}' -f $guid;
 			$subscriptionNew = New-SBSubscription -TopicPath $topicName -Name $subscriptionName -LockDuration 300;
 			$subscriptionPath = "{0}\Subscriptions\{1}" -f $topicName, $subscriptionName;
