@@ -18,6 +18,6 @@ d-fens GmbH, General-Guisan-Strasse 6, CH-6300 Zug, Switzerland
 
 PowerShell module for Azure service bus
 
-[![TeamCity Logo](https://github.com/dfensgmbh/biz.dfch.CS.Activiti.Client/blob/develop/TeamCity.png)](https://www.jetbrains.com/teamcity/)
+[![TeamCity Logo](https://github.com/dfensgmbh/biz.dfch.PS.Azure.ServiceBus.Client/blob/develop/TeamCity.png)](https://www.jetbrains.com/teamcity/)
 
 Released with TeamCity
