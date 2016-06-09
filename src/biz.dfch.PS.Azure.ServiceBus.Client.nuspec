@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
   <metadata>
     <id>biz.dfch.PS.Azure.ServiceBus.Client</id>
-    <version>1.0.1</version>
+    <version>1.0.2</version>
     <title>biz.dfch.PS.Azure.ServiceBus.Client</title>
     <authors>d-fens GmbH</authors>
     <owners>Ronald Rink</owners>
@@ -23,9 +23,8 @@ You can also download this module via [NuGet](http://nuget.org) with [Install-Pa
 See https://github.com/dfensgmbh/biz.dfch.PS.Azure.ServiceBus.Client/wiki for a detailed description on how to use the Cmdlets in this module.
 </description>
     <summary>This Microsoft PowerShell module contains Cmdlets to perform various base actions and utility/convenience functions with Azure Service Bus.</summary>
-    <releaseNotes>20160201
-* Fixed exception handler
-* Guid.Guid to Guid.ToString() replacement
+    <releaseNotes>20160609
+* Updated ServiceBus dependency to avoid frame size errors when running on .NET 4.6
 * installation base path is '$env:ProgramFiles\WindowsPowerShell\Modules' and can be manually set as input parameter to Install.ps1</releaseNotes>
     <copyright>(c) 2015 d-fens GmbH</copyright>
     <language>en-US</language>
@@ -52,7 +51,7 @@ See https://github.com/dfensgmbh/biz.dfch.PS.Azure.ServiceBus.Client/wiki for a 
     <file src="Get-MessageReceiver.ps1" target="tools\Get-MessageReceiver.ps1" />
     <file src="Get-MessageSender.ps1" target="tools\Get-MessageSender.ps1" />
     <file src="..\packages\Microsoft.WindowsAzure.ConfigurationManager.2.0.0.0\lib\net40\Microsoft.WindowsAzure.Configuration.dll" target="tools\Microsoft.WindowsAzure.Configuration.dll" />
-    <file src="..\packages\ServiceBus.v1_1.1.0.5\lib\net40-full\Microsoft.ServiceBus.dll" target="tools\Microsoft.ServiceBus.dll" />
-    <file src="..\packages\ServiceBus.v1_1.1.0.5\lib\net40-full\Microsoft.ServiceBus.xml" target="tools\Microsoft.ServiceBus.xml" />
+    <file src="..\packages\ServiceBus.v1_1.1.0.6\lib\net40-full\Microsoft.ServiceBus.dll" target="tools\Microsoft.ServiceBus.dll" />
+    <file src="..\packages\ServiceBus.v1_1.1.0.6\lib\net40-full\Microsoft.ServiceBus.xml" target="tools\Microsoft.ServiceBus.xml" />
   </files>
 </package>
