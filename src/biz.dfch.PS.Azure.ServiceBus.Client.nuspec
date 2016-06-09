@@ -52,7 +52,7 @@ See https://github.com/dfensgmbh/biz.dfch.PS.Azure.ServiceBus.Client/wiki for a 
     <file src="Get-MessageReceiver.ps1" target="tools\Get-MessageReceiver.ps1" />
     <file src="Get-MessageSender.ps1" target="tools\Get-MessageSender.ps1" />
     <file src="..\packages\Microsoft.WindowsAzure.ConfigurationManager.2.0.0.0\lib\net40\Microsoft.WindowsAzure.Configuration.dll" target="tools\Microsoft.WindowsAzure.Configuration.dll" />
-    <file src="..\packages\ServiceBus.v1_1.1.0.5\lib\net40-full\Microsoft.ServiceBus.dll" target="tools\Microsoft.ServiceBus.dll" />
-    <file src="..\packages\ServiceBus.v1_1.1.0.5\lib\net40-full\Microsoft.ServiceBus.xml" target="tools\Microsoft.ServiceBus.xml" />
+    <file src="..\packages\ServiceBus.v1_1.1.0.6\lib\net40-full\Microsoft.ServiceBus.dll" target="tools\Microsoft.ServiceBus.dll" />
+    <file src="..\packages\ServiceBus.v1_1.1.0.6\lib\net40-full\Microsoft.ServiceBus.xml" target="tools\Microsoft.ServiceBus.xml" />
   </files>
 </package>
