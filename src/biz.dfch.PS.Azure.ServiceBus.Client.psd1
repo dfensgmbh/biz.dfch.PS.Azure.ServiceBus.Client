@@ -125,6 +125,28 @@ FileList = @(
 
 # Private data to pass to the module specified in RootModule/ModuleToProcess
 PrivateData = @{
+
+	PSData = @{
+
+        # Tags applied to this module. These help with module discovery in online galleries.
+        Tags = @("dfch", "PowerShell", "Azure", "Client", "Service", "Bus")
+		
+        # A URL to the license for this module.
+        LicenseUri = 'https://github.com/dfensgmbh/biz.dfch.PS.Azure.ServiceBus.Client/blob/master/LICENSE'
+		
+        # A URL to the main website for this project.
+        ProjectUri = 'https://github.com/dfensgmbh/biz.dfch.PS.Azure.ServiceBus.Client'
+		
+        # A URL to an icon representing this module.
+        IconUri = 'https://raw.githubusercontent.com/dfensgmbh/biz.dfch.PS.Azure.ServiceBus.Client/master/logo-32x32.png'
+		
+        # ReleaseNotes of this module
+        ReleaseNotes = '20160609
+* Updated ServiceBus dependency to avoid frame size errors when running on .NET 4.6
+* installation base path is "$env:ProgramFiles\WindowsPowerShell\Modules" and can be manually set as input parameter to Install.ps1'
+
+    } 
+
 	"MODULEVAR" = "biz_dfch_PS_Azure_ServiceBus_Client"
 }
 
