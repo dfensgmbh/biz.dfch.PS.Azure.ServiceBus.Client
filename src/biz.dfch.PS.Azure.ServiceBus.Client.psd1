@@ -143,7 +143,7 @@ PrivateData = @{
         # ReleaseNotes of this module
         ReleaseNotes = '20160609
 * Updated ServiceBus dependency to avoid frame size errors when running on .NET 4.6
-* installation base path is '$env:ProgramFiles\WindowsPowerShell\Modules' and can be manually set as input parameter to Install.ps1'
+* installation base path is "$env:ProgramFiles\WindowsPowerShell\Modules" and can be manually set as input parameter to Install.ps1'
 
     } 
 
